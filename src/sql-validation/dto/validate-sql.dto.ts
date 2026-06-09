@@ -10,6 +10,7 @@ const VALIDATION_TYPES = [
   'insert_row',
   'update_row',
   'delete_row',
+  'select_query',
 ] as const satisfies readonly SqlValidationType[];
 
 export class ValidateSqlDto {

@@ -408,6 +408,74 @@ function validateDeleteRow(sql: string, expectation?: TaskExpectation): SqlValid
   return success(`Correcto: sentencia DELETE válida para la tabla \`${table}\`.`);
 }
 
+function extractSelectClause(statement: string): string | null {
+  const match = statement.match(/^SELECT\s+([\s\S]+?)\s+FROM\b/i);
+  return match ? match[1].trim() : null;
+}
+
+function columnPresentInSelect(selectClause: string, column: string): boolean {
+  const escaped = column.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(`\\b\`?${escaped}\`?\\b`, 'i').test(selectClause);
+}
+
+function validateSelectQuery(sql: string, expectation?: TaskExpectation): SqlValidationResult {
+  const single = assertSingleStatement(sql);
+  if (single) return single;
+
+  const statement = normalizeSqlStatement(sql);
+  const table = expectation?.selectTable ?? expectation?.tableName ?? SANDBOX_PRACTICE_TABLE;
+
+  if (!/^SELECT\b/i.test(statement)) {
+    return failure('La sentencia debe comenzar con SELECT.');
+  }
+
+  const fromPattern = new RegExp(`\\bFROM\\s+\`?${table}\`?\\b`, 'i');
+  if (!fromPattern.test(statement)) {
+    return failure(
+      `Debes consultar la tabla \`${table}\` con FROM.`,
+      ['Revisa la orden de la actividad.'],
+    );
+  }
+
+  const selectClause = extractSelectClause(statement);
+  if (!selectClause) {
+    return failure('La consulta SELECT debe incluir la cláusula FROM.');
+  }
+
+  const columns = expectation?.selectColumns;
+  if (columns === 'all') {
+    if (!/^\*$/i.test(selectClause.trim())) {
+      return failure(
+        'Debes usar SELECT * para consultar todas las columnas.',
+        [`Ejemplo de estructura: SELECT * FROM ${table};`],
+      );
+    }
+  } else if (columns?.length) {
+    const missing = columns.filter((column) => !columnPresentInSelect(selectClause, column));
+    if (missing.length > 0) {
+      return failure(
+        `La consulta debe incluir las columnas: ${columns.map((c) => `\`${c}\``).join(', ')}.`,
+        [`Faltan: ${missing.map((c) => `\`${c}\``).join(', ')}.`],
+      );
+    }
+  }
+
+  const selectWhere = expectation?.selectWhere ?? {};
+  const requiresWhere = Object.keys(selectWhere).length > 0;
+
+  if (requiresWhere && !/\bWHERE\b/i.test(statement)) {
+    return failure('La consulta debe incluir una cláusula WHERE.');
+  }
+
+  for (const [column, expected] of Object.entries(selectWhere)) {
+    if (!whereConditionPresent(statement, column, expected)) {
+      return failure(`La cláusula WHERE debe filtrar por \`${column}\` = ${expected}.`);
+    }
+  }
+
+  return success(`Correcto: consulta SELECT válida sobre la tabla \`${table}\`.`);
+}
+
 export function validateSqlByType(
   sql: string,
   type: SqlValidationType,
@@ -428,6 +496,8 @@ export function validateSqlByType(
       return validateUpdateRow(sql, expectation);
     case 'delete_row':
       return validateDeleteRow(sql, expectation);
+    case 'select_query':
+      return validateSelectQuery(sql, expectation);
     default:
       return failure('Tipo de validación no soportado.');
   }
