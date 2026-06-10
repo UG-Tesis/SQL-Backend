@@ -271,6 +271,34 @@ function numericAssignmentPresent(
   return new RegExp(`\\b\`?${escapedColumn}\`?\\s*=\\s*${value}\\b`, 'i').test(statement);
 }
 
+function extractInsertColumns(statement: string): string[] | null {
+  const match = statement.match(/\bINSERT\s+INTO\s+`?[\w`]+`?\s*\(\s*([^)]+)\s*\)/i);
+  if (!match) return null;
+  return match[1]
+    .split(',')
+    .map((column) => unquoteIdentifier(column.trim()).toLowerCase());
+}
+
+function extractUpdateSetColumns(statement: string): string[] {
+  const match = statement.match(/\bSET\b([\s\S]*?)\bWHERE\b/i);
+  if (!match) return [];
+  return match[1]
+    .split(',')
+    .map((assignment) => {
+      const column = assignment.trim().split('=')[0]?.trim();
+      return column ? unquoteIdentifier(column).toLowerCase() : '';
+    })
+    .filter(Boolean);
+}
+
+function whereColumnPresent(statement: string, column: string): boolean {
+  const escapedColumn = column.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(
+    `\\bWHERE\\b[\\s\\S]*\\b\`?${escapedColumn}\`?\\s*=`,
+    'i',
+  ).test(statement);
+}
+
 function whereConditionPresent(
   statement: string,
   column: string,
@@ -314,6 +342,27 @@ function validateInsertRow(sql: string, expectation?: TaskExpectation): SqlValid
       'No debes incluir la columna `id` en el INSERT; se genera automáticamente.',
       ['Inserta solo nombre, email y edad.'],
     );
+  }
+
+  const requiredColumns = expectation?.requiredInsertColumns ?? [];
+  if (requiredColumns.length > 0) {
+    const insertColumns = extractInsertColumns(statement);
+    if (!insertColumns) {
+      return failure(
+        'Debes indicar explícitamente las columnas en el INSERT.',
+        [`Ejemplo: INSERT INTO ${table} (nombre, email, edad) VALUES (...);`],
+      );
+    }
+
+    const missingColumns = requiredColumns.filter(
+      (column) => !insertColumns.includes(column.toLowerCase()),
+    );
+    if (missingColumns.length > 0) {
+      return failure(
+        `La sentencia INSERT debe incluir las columnas: ${requiredColumns.join(', ')}.`,
+        [`Faltan: ${missingColumns.join(', ')}.`],
+      );
+    }
   }
 
   const values = expectation?.insertValues ?? {};
@@ -360,10 +409,31 @@ function validateUpdateRow(sql: string, expectation?: TaskExpectation): SqlValid
     return failure('La sentencia UPDATE debe incluir una cláusula WHERE.');
   }
 
+  const requiredSetColumns = expectation?.requiredUpdateSetColumns ?? [];
+  if (requiredSetColumns.length > 0) {
+    const setColumns = extractUpdateSetColumns(statement);
+    const missingSetColumns = requiredSetColumns.filter(
+      (column) => !setColumns.includes(column.toLowerCase()),
+    );
+    if (missingSetColumns.length > 0) {
+      return failure(
+        `La sentencia UPDATE debe modificar la columna: ${requiredSetColumns.join(', ')}.`,
+        [`Falta actualizar: ${missingSetColumns.join(', ')} en la cláusula SET.`],
+      );
+    }
+  }
+
   const updateSet = expectation?.updateSet ?? {};
   for (const [column, expected] of Object.entries(updateSet)) {
     if (typeof expected === 'number' && !numericAssignmentPresent(statement, column, expected)) {
       return failure(`Debes actualizar \`${column}\` al valor ${expected}.`);
+    }
+  }
+
+  const requiredWhereColumns = expectation?.requiredWhereColumns ?? [];
+  for (const column of requiredWhereColumns) {
+    if (!whereColumnPresent(statement, column)) {
+      return failure(`La cláusula WHERE debe filtrar por la columna \`${column}\`.`);
     }
   }
 
@@ -398,6 +468,13 @@ function validateDeleteRow(sql: string, expectation?: TaskExpectation): SqlValid
     );
   }
 
+  const requiredWhereColumns = expectation?.requiredWhereColumns ?? [];
+  for (const column of requiredWhereColumns) {
+    if (!whereColumnPresent(statement, column)) {
+      return failure(`La cláusula WHERE debe filtrar por la columna \`${column}\`.`);
+    }
+  }
+
   const deleteWhere = expectation?.deleteWhere ?? {};
   for (const [column, expected] of Object.entries(deleteWhere)) {
     if (!whereConditionPresent(statement, column, expected)) {
@@ -416,6 +493,31 @@ function extractSelectClause(statement: string): string | null {
 function columnPresentInSelect(selectClause: string, column: string): boolean {
   const escaped = column.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   return new RegExp(`\\b\`?${escaped}\`?\\b`, 'i').test(selectClause);
+}
+
+function whereOperatorPresent(statement: string, operator: string): boolean {
+  switch (operator) {
+    case '<':
+      return /\b\w+\s*<\s*[\d'"]/.test(statement);
+    case '>':
+      return /\b\w+\s*>\s*[\d'"]/.test(statement);
+    case '!=':
+      return /(?:!=|<>)/.test(statement);
+    case 'AND':
+      return /\bAND\b/i.test(statement);
+    case 'OR':
+      return /\bOR\b/i.test(statement);
+    case 'NOT':
+      return /\bNOT\b/i.test(statement);
+    case 'BETWEEN':
+      return /\bBETWEEN\b/i.test(statement);
+    case 'IN':
+      return /\bIN\s*\(/i.test(statement);
+    case 'LIKE':
+      return /\bLIKE\b/i.test(statement);
+    default:
+      return false;
+  }
 }
 
 function validateSelectQuery(sql: string, expectation?: TaskExpectation): SqlValidationResult {
@@ -460,8 +562,30 @@ function validateSelectQuery(sql: string, expectation?: TaskExpectation): SqlVal
     }
   }
 
+  if (expectation?.requiresJoin) {
+    if (!/\bJOIN\b/i.test(statement)) {
+      return failure('La consulta debe incluir JOIN para unir dos tablas.');
+    }
+
+    if (expectation.joinTable) {
+      const joinTablePattern = new RegExp(
+        `\\bJOIN\\s+\`?${expectation.joinTable}\`?\\b`,
+        'i',
+      );
+      if (!joinTablePattern.test(statement)) {
+        return failure(`Debes hacer JOIN con la tabla \`${expectation.joinTable}\`.`);
+      }
+    }
+
+    if (!/\bON\b/i.test(statement)) {
+      return failure('El JOIN debe incluir la condición ON que enlaza las tablas.');
+    }
+  }
+
   const selectWhere = expectation?.selectWhere ?? {};
-  const requiresWhere = Object.keys(selectWhere).length > 0;
+  const whereOperators = expectation?.requiresWhereOperators ?? [];
+  const requiresWhere =
+    Object.keys(selectWhere).length > 0 || whereOperators.length > 0;
 
   if (requiresWhere && !/\bWHERE\b/i.test(statement)) {
     return failure('La consulta debe incluir una cláusula WHERE.');
@@ -470,6 +594,71 @@ function validateSelectQuery(sql: string, expectation?: TaskExpectation): SqlVal
   for (const [column, expected] of Object.entries(selectWhere)) {
     if (!whereConditionPresent(statement, column, expected)) {
       return failure(`La cláusula WHERE debe filtrar por \`${column}\` = ${expected}.`);
+    }
+  }
+
+  for (const operator of whereOperators) {
+    if (!whereOperatorPresent(statement, operator)) {
+      return failure(`La consulta debe usar el operador ${operator} en la cláusula WHERE.`);
+    }
+  }
+
+  if (expectation?.requiresOrderBy && !/\bORDER\s+BY\b/i.test(statement)) {
+    return failure('La consulta debe incluir una cláusula ORDER BY.');
+  }
+
+  if (expectation?.orderByColumn) {
+    const escaped = expectation.orderByColumn.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    if (!new RegExp(`\\bORDER\\s+BY\\b[\\s\\S]*\\b\`?${escaped}\`?\\b`, 'i').test(statement)) {
+      return failure(
+        `La cláusula ORDER BY debe ordenar por la columna \`${expectation.orderByColumn}\`.`,
+      );
+    }
+  }
+
+  if (expectation?.requiresGroupBy && !/\bGROUP\s+BY\b/i.test(statement)) {
+    return failure('La consulta debe incluir una cláusula GROUP BY.');
+  }
+
+  if (expectation?.groupByColumn) {
+    const escaped = expectation.groupByColumn.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    if (!new RegExp(`\\bGROUP\\s+BY\\b[\\s\\S]*\\b\`?${escaped}\`?\\b`, 'i').test(statement)) {
+      return failure(
+        `La cláusula GROUP BY debe agrupar por la columna \`${expectation.groupByColumn}\`.`,
+      );
+    }
+  }
+
+  const aggregates = expectation?.requiresAggregates ?? [];
+  const aggregateColumn = expectation?.aggregateColumn;
+  for (const aggregate of aggregates) {
+    if (aggregateColumn) {
+      const escapedColumn = aggregateColumn.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      if (
+        !new RegExp(
+          `\\b${aggregate}\\s*\\(\\s*\`?${escapedColumn}\`?\\s*\\)`,
+          'i',
+        ).test(statement)
+      ) {
+        return failure(
+          `La consulta debe usar ${aggregate}(\`${aggregateColumn}\`).`,
+        );
+      }
+      continue;
+    }
+
+    if (!new RegExp(`\\b${aggregate}\\s*\\(`, 'i').test(statement)) {
+      return failure(`La consulta debe usar la función de agregación ${aggregate}().`);
+    }
+  }
+
+  if (expectation?.requiresLimit && !/\bLIMIT\b/i.test(statement)) {
+    return failure('La consulta debe incluir una cláusula LIMIT.');
+  }
+
+  if (expectation?.limitValue != null) {
+    if (!new RegExp(`\\bLIMIT\\s+${expectation.limitValue}\\b`, 'i').test(statement)) {
+      return failure(`La cláusula LIMIT debe ser ${expectation.limitValue}.`);
     }
   }
 
