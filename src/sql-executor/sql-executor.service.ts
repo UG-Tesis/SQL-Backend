@@ -6,6 +6,7 @@ import {
 import { ConfigService } from '@nestjs/config';
 import type { FieldPacket, Pool, ResultSetHeader, RowDataPacket } from 'mysql2/promise';
 import { createPool } from 'mysql2/promise';
+import { getMysqlPoolOptions } from '../config/mysql.config';
 import {
   assertSandboxSqlAllowed,
   DEFAULT_SANDBOX_DATABASE,
@@ -40,18 +41,7 @@ export class SqlExecutorService implements OnModuleDestroy {
         DEFAULT_SANDBOX_DATABASE,
       );
 
-      this.pool = createPool({
-        host: this.configService.get<string>('MYSQL_HOST', 'localhost'),
-        port: Number(this.configService.get<string>('MYSQL_PORT', '3306')),
-        user: this.configService.get<string>('MYSQL_USER', 'root'),
-        password: this.configService.get<string>('MYSQL_PASSWORD', ''),
-        database: sandboxDatabase,
-        waitForConnections: true,
-        connectionLimit: 5,
-        maxIdle: 5,
-        idleTimeout: 60_000,
-        multipleStatements: false,
-      });
+      this.pool = createPool(getMysqlPoolOptions(this.configService, sandboxDatabase));
     }
     return this.pool;
   }
