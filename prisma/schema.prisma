@@ -9,107 +9,40 @@ datasource db {
 }
 
 model actividades {
-  id               Int                @id @default(autoincrement())
-  modulo_id        Int
-  nombre           String             @db.VarChar(150)
-  descripcion      String?            @db.Text
-  orden            Int                @default(1)
-  activo           Boolean?           @default(true)
-  fecha_creacion   DateTime?          @default(now()) @db.Timestamp(0)
-  modulos          modulos            @relation(fields: [modulo_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "actividades_ibfk_1")
-  avance_actividad avance_actividad[]
-  preguntas        preguntas[]
+  id             Int         @id @default(autoincrement())
+  modulo_id      Int
+  nombre         String      @db.VarChar(150)
+  descripcion    String?     @db.Text
+  orden          Int         @default(1)
+  activo         Boolean?    @default(true)
+  fecha_creacion DateTime?   @default(now()) @db.Timestamp(0)
+  modulos        modulos     @relation(fields: [modulo_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "actividades_ibfk_1")
+  preguntas      preguntas[]
 
   @@index([modulo_id], map: "modulo_id")
-}
-
-model avance_actividad {
-  id                    Int           @id @default(autoincrement())
-  inscripcion_id        Int
-  actividad_id          Int
-  finalizado            Boolean?      @default(false)
-  total_preguntas       Int?          @default(0)
-  preguntas_respondidas Int?          @default(0)
-  porcentaje            Decimal?      @default(0.00) @db.Decimal(5, 2)
-  fecha_inicio          DateTime?     @db.Timestamp(0)
-  fecha_finalizacion    DateTime?     @db.Timestamp(0)
-  inscripciones         inscripciones @relation(fields: [inscripcion_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "avance_actividad_ibfk_1")
-  actividades           actividades   @relation(fields: [actividad_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "avance_actividad_ibfk_2")
-
-  @@unique([inscripcion_id, actividad_id], map: "unico_avance")
-  @@index([actividad_id], map: "actividad_id")
 }
 
 model cursos {
-  id             Int             @id @default(autoincrement())
-  nombre         String          @db.VarChar(150)
-  descripcion    String?         @db.Text
+  id             Int       @id @default(autoincrement())
+  nombre         String    @db.VarChar(150)
+  descripcion    String?   @db.Text
   duracion_horas Int?
-  activo         Boolean?        @default(true)
-  fecha_creacion DateTime?       @default(now()) @db.Timestamp(0)
-  inscripciones  inscripciones[]
+  activo         Boolean?  @default(true)
+  fecha_creacion DateTime? @default(now()) @db.Timestamp(0)
   modulos        modulos[]
 }
 
-/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
-model inscripciones {
-  id                Int                   @id @default(autoincrement())
-  persona_id        Int
-  curso_id          Int
-  fecha_inscripcion DateTime?             @default(now()) @db.Timestamp(0)
-  fecha_completado  DateTime?             @db.Timestamp(0)
-  estado            inscripciones_estado? @default(activo)
-  porcentaje_avance Decimal?              @default(0.00) @db.Decimal(5, 2)
-  avance_actividad  avance_actividad[]
-  personas          personas              @relation(fields: [persona_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "inscripciones_ibfk_1")
-  cursos            cursos                @relation(fields: [curso_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "inscripciones_ibfk_2")
-  modulo_estado     modulo_estado[]
-  progreso_modulos  progreso_modulos[]
-
-  @@unique([persona_id, curso_id], map: "unica_inscripcion")
-  @@index([curso_id], map: "curso_id")
-}
-
-model modulo_estado {
-  id                 Int                @id @default(autoincrement())
-  inscripcion_id     Int
-  modulo_id          Int
-  finalizado         Boolean?           @default(false)
-  porcentaje         Decimal?           @default(0.00) @db.Decimal(5, 2)
-  fecha_inicio       DateTime?          @db.Timestamp(0)
-  fecha_finalizacion DateTime?          @db.Timestamp(0)
-  inscripciones      inscripciones      @relation(fields: [inscripcion_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "modulo_estado_ibfk_1")
-  modulos            modulos            @relation(fields: [modulo_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "modulo_estado_ibfk_2")
-  progreso_modulos   progreso_modulos[]
-
-  @@unique([inscripcion_id, modulo_id], map: "unico_modulo_estado")
-  @@index([modulo_id], map: "modulo_id")
-}
-
 model modulos {
-  id               Int                @id @default(autoincrement())
-  curso_id         Int
-  nombre           String             @db.VarChar(150)
-  descripcion      String?            @db.Text
-  orden            Int
-  duracion_horas   Int?
-  actividades      actividades[]
-  modulo_estado    modulo_estado[]
-  cursos           cursos             @relation(fields: [curso_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "modulos_ibfk_1")
-  progreso_modulos progreso_modulos[]
+  id             Int           @id @default(autoincrement())
+  curso_id       Int
+  nombre         String        @db.VarChar(150)
+  descripcion    String?       @db.Text
+  orden          Int
+  duracion_horas Int?
+  actividades    actividades[]
+  cursos         cursos        @relation(fields: [curso_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "modulos_ibfk_1")
 
   @@index([curso_id], map: "curso_id")
-}
-
-model personas {
-  id             Int             @id @default(autoincrement())
-  cedula         String          @unique(map: "cedula") @db.VarChar(20)
-  nombre         String          @db.VarChar(100)
-  apellido       String          @db.VarChar(100)
-  email          String?         @unique(map: "email") @db.VarChar(150)
-  telefono       String?         @db.VarChar(20)
-  fecha_registro DateTime?       @default(now()) @db.Timestamp(0)
-  inscripciones  inscripciones[]
 }
 
 model preguntas {
@@ -120,34 +53,4 @@ model preguntas {
   actividades  actividades @relation(fields: [actividad_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "preguntas_ibfk_1")
 
   @@index([actividad_id], map: "actividad_id")
-}
-
-model progreso_modulos {
-  id               Int                      @id @default(autoincrement())
-  inscripcion_id   Int
-  modulo_id        Int
-  modulo_estado_id Int?
-  estado           progreso_modulos_estado? @default(pendiente)
-  porcentaje       Int?                     @default(0)
-  fecha_inicio     DateTime?                @db.Timestamp(0)
-  fecha_completado DateTime?                @db.Timestamp(0)
-  inscripciones    inscripciones            @relation(fields: [inscripcion_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "progreso_modulos_ibfk_1")
-  modulos          modulos                  @relation(fields: [modulo_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "progreso_modulos_ibfk_2")
-  modulo_estado    modulo_estado?           @relation(fields: [modulo_estado_id], references: [id], onUpdate: NoAction, map: "progreso_modulos_ibfk_3")
-
-  @@unique([inscripcion_id, modulo_id], map: "unico_progreso")
-  @@index([modulo_estado_id], map: "modulo_estado_id")
-  @@index([modulo_id], map: "modulo_id")
-}
-
-enum progreso_modulos_estado {
-  pendiente
-  en_progreso
-  completado
-}
-
-enum inscripciones_estado {
-  activo
-  completado
-  abandonado
 }

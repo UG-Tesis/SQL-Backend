@@ -3,7 +3,7 @@ import { IsNotEmpty, IsString, MaxLength } from 'class-validator';
 
 export class ExecuteSqlDto {
   @ApiProperty({
-    example: 'SELECT id, nombre, apellido FROM personas LIMIT 10',
+    example: 'SELECT * FROM practica_clientes LIMIT 10',
     description: 'Sentencia SQL a ejecutar en la base de datos del curso',
   })
   @IsString()
