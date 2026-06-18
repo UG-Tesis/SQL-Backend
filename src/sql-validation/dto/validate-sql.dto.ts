@@ -1,5 +1,13 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsIn, IsInt, IsNotEmpty, IsOptional, IsString, MaxLength, Min } from 'class-validator';
+import {
+  IsIn,
+  IsInt,
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+  MaxLength,
+  Min,
+} from 'class-validator';
 import type { SqlValidationType } from '../sql-validation.types';
 
 const VALIDATION_TYPES = [
@@ -34,7 +42,8 @@ export class ValidateSqlDto {
 
   @ApiPropertyOptional({
     enum: VALIDATION_TYPES,
-    description: 'Tipo explícito de validación (opcional si se envía actividadId)',
+    description:
+      'Tipo explícito de validación (opcional si se envía actividadId)',
   })
   @IsOptional()
   @IsIn(VALIDATION_TYPES)

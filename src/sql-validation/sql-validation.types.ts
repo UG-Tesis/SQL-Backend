@@ -230,7 +230,10 @@ export const MODULO_5_TASK_EXPECTATIONS: Record<number, TaskExpectation> = {
   },
 };
 
-export const MODULE_VALIDATION_BY_ORDEN: Record<number, Record<number, SqlValidationType>> = {
+export const MODULE_VALIDATION_BY_ORDEN: Record<
+  number,
+  Record<number, SqlValidationType>
+> = {
   1: MODULO_1_VALIDATION_BY_ORDEN,
   2: MODULO_2_VALIDATION_BY_ORDEN,
   3: MODULO_3_VALIDATION_BY_ORDEN,
@@ -238,7 +241,10 @@ export const MODULE_VALIDATION_BY_ORDEN: Record<number, Record<number, SqlValida
   5: MODULO_5_VALIDATION_BY_ORDEN,
 };
 
-export const MODULE_TASK_EXPECTATIONS: Record<number, Record<number, TaskExpectation>> = {
+export const MODULE_TASK_EXPECTATIONS: Record<
+  number,
+  Record<number, TaskExpectation>
+> = {
   1: MODULO_1_TASK_EXPECTATIONS,
   2: MODULO_2_TASK_EXPECTATIONS,
   3: MODULO_3_TASK_EXPECTATIONS,

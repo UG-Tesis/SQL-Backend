@@ -22,8 +22,9 @@ export function getMysqlSslOptions(configService: ConfigService) {
 
   // Railway TCP Proxy usa certificados que fallan con rejectUnauthorized: true
   const rejectUnauthorized =
-    configService.get<string>('MYSQL_SSL_REJECT_UNAUTHORIZED', 'false').toLowerCase() ===
-    'true';
+    configService
+      .get<string>('MYSQL_SSL_REJECT_UNAUTHORIZED', 'false')
+      .toLowerCase() === 'true';
 
   return { rejectUnauthorized };
 }

@@ -1,4 +1,8 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { validateSqlByType } from './sql-validation.rules';
 import {
@@ -16,7 +20,10 @@ interface ActividadValidationContext {
 
 @Injectable()
 export class SqlValidationService {
-  private readonly actividadContextCache = new Map<number, ActividadValidationContext>();
+  private readonly actividadContextCache = new Map<
+    number,
+    ActividadValidationContext
+  >();
 
   constructor(private readonly prisma: PrismaService) {}
 
@@ -29,7 +36,9 @@ export class SqlValidationService {
     let expectation: TaskExpectation | undefined;
 
     if (input.actividadId) {
-      const actividadContext = await this.resolveActividadContext(input.actividadId);
+      const actividadContext = await this.resolveActividadContext(
+        input.actividadId,
+      );
       type = type ?? actividadContext.validationType;
       expectation = actividadContext.expectation;
     }
@@ -43,7 +52,9 @@ export class SqlValidationService {
     return validateSqlByType(input.sql, type, expectation);
   }
 
-  private async resolveActividadContext(actividadId: number): Promise<ActividadValidationContext> {
+  private async resolveActividadContext(
+    actividadId: number,
+  ): Promise<ActividadValidationContext> {
     const cached = this.actividadContextCache.get(actividadId);
     if (cached) {
       return cached;
@@ -55,7 +66,9 @@ export class SqlValidationService {
     });
 
     if (!actividad) {
-      throw new NotFoundException(`Actividad con id ${actividadId} no encontrada`);
+      throw new NotFoundException(
+        `Actividad con id ${actividadId} no encontrada`,
+      );
     }
 
     const moduloOrden = actividad.modulos.orden;

@@ -1,11 +1,8 @@
 import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
+import compression from 'compression';
 import { AppModule } from './app.module';
 import { setupSwagger } from './config/swagger.config';
-
-// compression es CJS (export =); el default import falla en runtime sin esModuleInterop.
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-const compression = require('compression') as () => import('express').RequestHandler;
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -34,4 +31,4 @@ async function bootstrap() {
   console.log(`API disponible en http://0.0.0.0:${port}/api`);
   console.log(`Swagger disponible en http://localhost:${port}/docs`);
 }
-bootstrap();
+void bootstrap();

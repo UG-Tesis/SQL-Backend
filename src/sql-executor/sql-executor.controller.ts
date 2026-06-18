@@ -6,7 +6,10 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { ExecuteSqlDto } from './dto/execute-sql.dto';
-import { SqlExecutorService, type SqlExecutionResult } from './sql-executor.service';
+import {
+  SqlExecutorService,
+  type SqlExecutionResult,
+} from './sql-executor.service';
 
 @ApiTags('sql')
 @Controller('sql')

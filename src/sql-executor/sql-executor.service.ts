@@ -4,7 +4,12 @@ import {
   OnModuleDestroy,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import type { FieldPacket, Pool, ResultSetHeader, RowDataPacket } from 'mysql2/promise';
+import type {
+  FieldPacket,
+  Pool,
+  ResultSetHeader,
+  RowDataPacket,
+} from 'mysql2/promise';
 import { createPool } from 'mysql2/promise';
 import { getMysqlPoolOptions } from '../config/mysql.config';
 import {
@@ -43,13 +48,18 @@ export class SqlExecutorService implements OnModuleDestroy {
         DEFAULT_SANDBOX_DATABASE,
       );
 
-      this.pool = createPool(getMysqlPoolOptions(this.configService, sandboxDatabase));
+      this.pool = createPool(
+        getMysqlPoolOptions(this.configService, sandboxDatabase),
+      );
     }
     return this.pool;
   }
 
   getSandboxDatabase(): string {
-    return this.configService.get<string>(SANDBOX_DATABASE_ENV, DEFAULT_SANDBOX_DATABASE);
+    return this.configService.get<string>(
+      SANDBOX_DATABASE_ENV,
+      DEFAULT_SANDBOX_DATABASE,
+    );
   }
 
   async execute(sql: string): Promise<SqlExecutionResult> {
@@ -57,7 +67,9 @@ export class SqlExecutorService implements OnModuleDestroy {
 
     try {
       const pool = this.getPool();
-      const [result, fields] = await pool.query<RowDataPacket[] | ResultSetHeader>(statement);
+      const [result, fields] = await pool.query<
+        RowDataPacket[] | ResultSetHeader
+      >(statement);
 
       if (Array.isArray(result)) {
         const rows = result.map((row) => this.serializeRow(row));
@@ -84,7 +96,8 @@ export class SqlExecutorService implements OnModuleDestroy {
         message: `Sentencia ejecutada. Filas afectadas: ${header.affectedRows ?? 0}.`,
       };
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Error al ejecutar SQL';
+      const message =
+        error instanceof Error ? error.message : 'Error al ejecutar SQL';
       throw new BadRequestException(message);
     }
   }
@@ -103,7 +116,9 @@ export class SqlExecutorService implements OnModuleDestroy {
     }
 
     if (trimmed.length > 8000) {
-      throw new BadRequestException('La sentencia SQL supera el tamaño permitido.');
+      throw new BadRequestException(
+        'La sentencia SQL supera el tamaño permitido.',
+      );
     }
 
     const withoutComments = trimmed
@@ -121,7 +136,9 @@ export class SqlExecutorService implements OnModuleDestroy {
     }
 
     if (sanitized.includes(';')) {
-      throw new BadRequestException('Solo se permite ejecutar una sentencia SQL a la vez.');
+      throw new BadRequestException(
+        'Solo se permite ejecutar una sentencia SQL a la vez.',
+      );
     }
 
     const checkTarget = sanitized
@@ -132,7 +149,8 @@ export class SqlExecutorService implements OnModuleDestroy {
     try {
       assertSandboxSqlAllowed(checkTarget);
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Operación no permitida.';
+      const message =
+        error instanceof Error ? error.message : 'Operación no permitida.';
       throw new BadRequestException(message);
     }
 
@@ -208,7 +226,7 @@ export class SqlExecutorService implements OnModuleDestroy {
       try {
         return JSON.parse(JSON.stringify(value));
       } catch {
-        return String(value);
+        return Object.prototype.toString.call(value);
       }
     }
     return value;

@@ -42,7 +42,8 @@ export const DATABASE_FORBIDDEN_RULES: SqlValidationRule[] = [
 export const SANDBOX_FORBIDDEN_RULES: SqlValidationRule[] = [
   {
     pattern: /\bUSE\s+\S/i,
-    message: 'USE no está permitido. Las consultas se ejecutan solo en tesis_sandbox.',
+    message:
+      'USE no está permitido. Las consultas se ejecutan solo en tesis_sandbox.',
   },
   {
     pattern: /\bINTO\s+OUTFILE\b/i,

@@ -64,10 +64,7 @@ export class CursosController {
   @ApiOperation({ summary: 'Actualizar un curso' })
   @ApiParam({ name: 'id', type: Number })
   @ApiOkResponse({ description: 'Curso actualizado' })
-  update(
-    @Param('id', ParseIntPipe) id: number,
-    @Body() dto: UpdateCursoDto,
-  ) {
+  update(@Param('id', ParseIntPipe) id: number, @Body() dto: UpdateCursoDto) {
     return this.cursosService.update(id, dto);
   }
 

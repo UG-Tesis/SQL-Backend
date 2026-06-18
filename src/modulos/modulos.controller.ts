@@ -55,10 +55,7 @@ export class ModulosController {
   @ApiOperation({ summary: 'Actualizar un módulo' })
   @ApiParam({ name: 'id', type: Number })
   @ApiOkResponse({ description: 'Módulo actualizado' })
-  update(
-    @Param('id', ParseIntPipe) id: number,
-    @Body() dto: UpdateModuloDto,
-  ) {
+  update(@Param('id', ParseIntPipe) id: number, @Body() dto: UpdateModuloDto) {
     return this.modulosService.update(id, dto);
   }
 
