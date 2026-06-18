@@ -3,6 +3,7 @@ import {
   Controller,
   Delete,
   Get,
+  Header,
   Param,
   ParseIntPipe,
   Patch,
@@ -34,9 +35,21 @@ export class CursosController {
 
   @Get()
   @ApiOperation({ summary: 'Listar todos los cursos' })
-  @ApiOkResponse({ description: 'Lista de cursos con módulos' })
+  @ApiOkResponse({ description: 'Lista de cursos' })
   findAll() {
     return this.cursosService.findAll();
+  }
+
+  @Get('catalog')
+  @Header('Cache-Control', 'public, max-age=300')
+  @ApiOperation({
+    summary: 'Catálogo completo del curso activo',
+    description:
+      'Devuelve módulos, actividades y preguntas en una sola respuesta para la sección de práctica.',
+  })
+  @ApiOkResponse({ description: 'Catálogo del primer curso activo' })
+  findCatalog() {
+    return this.cursosService.findCatalog();
   }
 
   @Get(':id')

@@ -9,8 +9,15 @@ import {
   type TaskExpectation,
 } from './sql-validation.types';
 
+interface ActividadValidationContext {
+  validationType: SqlValidationType;
+  expectation?: TaskExpectation;
+}
+
 @Injectable()
 export class SqlValidationService {
+  private readonly actividadContextCache = new Map<number, ActividadValidationContext>();
+
   constructor(private readonly prisma: PrismaService) {}
 
   async validate(input: {
@@ -36,10 +43,12 @@ export class SqlValidationService {
     return validateSqlByType(input.sql, type, expectation);
   }
 
-  private async resolveActividadContext(actividadId: number): Promise<{
-    validationType: SqlValidationType;
-    expectation?: TaskExpectation;
-  }> {
+  private async resolveActividadContext(actividadId: number): Promise<ActividadValidationContext> {
+    const cached = this.actividadContextCache.get(actividadId);
+    if (cached) {
+      return cached;
+    }
+
     const actividad = await this.prisma.actividades.findUnique({
       where: { id: actividadId },
       include: { modulos: true },
@@ -64,9 +73,12 @@ export class SqlValidationService {
       );
     }
 
-    return {
+    const context: ActividadValidationContext = {
       validationType,
       expectation: MODULE_TASK_EXPECTATIONS[moduloOrden]?.[actividad.orden],
     };
+
+    this.actividadContextCache.set(actividadId, context);
+    return context;
   }
 }

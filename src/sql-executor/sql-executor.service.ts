@@ -28,6 +28,8 @@ export interface SqlExecutionResult {
   message: string;
 }
 
+const MAX_SELECT_ROWS = 500;
+
 @Injectable()
 export class SqlExecutorService implements OnModuleDestroy {
   private pool: Pool | null = null;
@@ -51,7 +53,7 @@ export class SqlExecutorService implements OnModuleDestroy {
   }
 
   async execute(sql: string): Promise<SqlExecutionResult> {
-    const statement = this.validateAndNormalize(sql);
+    const statement = this.applySelectRowLimit(this.validateAndNormalize(sql));
 
     try {
       const pool = this.getPool();
@@ -135,6 +137,24 @@ export class SqlExecutorService implements OnModuleDestroy {
     }
 
     return sanitized;
+  }
+
+  private applySelectRowLimit(statement: string): string {
+    const checkTarget = statement
+      .replace(/'([^'\\]|\\.)*'/g, "''")
+      .replace(/"([^"\\]|\\.)*"/g, '""')
+      .replace(/`([^`\\]|\\.)*`/g, '``')
+      .trim();
+
+    if (!/^\s*SELECT\b/i.test(checkTarget)) {
+      return statement;
+    }
+
+    if (/\bLIMIT\b/i.test(checkTarget)) {
+      return statement;
+    }
+
+    return `${statement} LIMIT ${MAX_SELECT_ROWS}`;
   }
 
   private mapColumns(fields?: FieldPacket[]): SqlColumnMeta[] {

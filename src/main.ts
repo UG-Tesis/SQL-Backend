@@ -3,8 +3,14 @@ import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { setupSwagger } from './config/swagger.config';
 
+// compression es CJS (export =); el default import falla en runtime sin esModuleInterop.
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const compression = require('compression') as () => import('express').RequestHandler;
+
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+
+  app.use(compression());
 
   app.enableCors({
     origin: true,

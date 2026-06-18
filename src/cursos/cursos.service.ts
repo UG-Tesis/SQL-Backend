@@ -21,8 +21,48 @@ export class CursosService {
   findAll() {
     return this.prisma.cursos.findMany({
       orderBy: { id: 'asc' },
-      include: { modulos: true },
+      select: {
+        id: true,
+        nombre: true,
+        descripcion: true,
+        duracion_horas: true,
+        activo: true,
+        fecha_creacion: true,
+      },
     });
+  }
+
+  async findCatalog() {
+    const curso = await this.prisma.cursos.findFirst({
+      where: {
+        OR: [{ activo: true }, { activo: null }],
+      },
+      orderBy: { id: 'asc' },
+      include: {
+        modulos: {
+          orderBy: { orden: 'asc' },
+          include: {
+            actividades: {
+              where: {
+                OR: [{ activo: true }, { activo: null }],
+              },
+              orderBy: { orden: 'asc' },
+              include: {
+                preguntas: {
+                  orderBy: { orden: 'asc' },
+                },
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!curso) {
+      throw new NotFoundException('No hay cursos disponibles.');
+    }
+
+    return curso;
   }
 
   async findOne(id: number) {
@@ -33,8 +73,15 @@ export class CursosService {
           orderBy: { orden: 'asc' },
           include: {
             actividades: {
+              where: {
+                OR: [{ activo: true }, { activo: null }],
+              },
               orderBy: { orden: 'asc' },
-              include: { preguntas: true },
+              include: {
+                preguntas: {
+                  orderBy: { orden: 'asc' },
+                },
+              },
             },
           },
         },
