@@ -57,7 +57,8 @@ export const MODULO_1_TASK_EXPECTATIONS: Record<number, TaskExpectation> = {
 export const MODULO_2_VALIDATION_BY_ORDEN: Record<number, SqlValidationType> = {
   1: 'insert_row',
   2: 'update_row',
-  3: 'delete_row',
+  3: 'insert_row',
+  4: 'delete_row',
 };
 
 export const MODULO_2_TASK_EXPECTATIONS: Record<number, TaskExpectation> = {
@@ -71,6 +72,11 @@ export const MODULO_2_TASK_EXPECTATIONS: Record<number, TaskExpectation> = {
     requiredWhereColumns: ['id'],
   },
   3: {
+    tableName: 'practica_inscripciones',
+    requiredInsertColumns: ['alumno_id', 'materia'],
+    insertValues: { materia: 'Bases de Datos' },
+  },
+  4: {
     tableName: 'practica_alumnos',
     requiredWhereColumns: ['id'],
   },
