@@ -38,8 +38,22 @@ export const DATABASE_FORBIDDEN_RULES: SqlValidationRule[] = [
   },
 ];
 
+/** DDL prohibido: el esquema del sandbox lo gestiona el administrador. */
+export const SANDBOX_DDL_FORBIDDEN_RULES: SqlValidationRule[] = [
+  {
+    pattern: /\b(?:DROP|CREATE|ALTER|TRUNCATE|RENAME)\s+TABLE\b/i,
+    message:
+      'No está permitido crear, modificar ni eliminar tablas en el sandbox.',
+  },
+  {
+    pattern: /\b(?:CREATE|DROP|ALTER)\s+(?:VIEW|INDEX|TRIGGER|PROCEDURE|FUNCTION|EVENT)\b/i,
+    message: 'No está permitido modificar objetos del esquema en el sandbox.',
+  },
+];
+
 /** Otras operaciones peligrosas en el entorno de estudiantes. */
 export const SANDBOX_FORBIDDEN_RULES: SqlValidationRule[] = [
+  ...SANDBOX_DDL_FORBIDDEN_RULES,
   {
     pattern: /\bUSE\s+\S/i,
     message:

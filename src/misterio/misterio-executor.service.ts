@@ -11,65 +11,78 @@ import type {
   RowDataPacket,
 } from 'mysql2/promise';
 import { createPool } from 'mysql2/promise';
-import { getMysqlSandboxPlayerPoolOptions } from '../config/mysql.config';
 import {
-  assertSandboxSqlAllowed,
-  DEFAULT_SANDBOX_DATABASE,
-  SANDBOX_DATABASE_ENV,
-} from './sql-executor.validation';
+  getMysqlMisterioPlayerPoolOptions,
+} from '../config/mysql.config';
+import type { SqlExecutionResult } from '../sql-executor/sql-executor.service';
+import {
+  MisterioSolutionService,
+  type MisterioSolutionCheck,
+} from './misterio-solution.service';
+import {
+  assertMisterioSqlAllowed,
+  DEFAULT_MISTERIO_DATABASE,
+  isSolutionInsert,
+  MISTERIO_DATABASE_ENV,
+  parseSolutionInsert,
+} from './misterio.validation';
 
-export interface SqlColumnMeta {
-  name: string;
-  type: string;
-}
-
-export interface SqlExecutionResult {
-  success: boolean;
-  rows: Record<string, unknown>[];
-  rowCount: number;
-  columns: SqlColumnMeta[];
-  affectedRows?: number;
-  insertId?: number;
-  message: string;
+export interface MisterioSqlExecutionResult extends SqlExecutionResult {
+  solutionCheck?: MisterioSolutionCheck;
 }
 
 const MAX_SELECT_ROWS = 500;
 
 @Injectable()
-export class SqlExecutorService implements OnModuleDestroy {
-  private pool: Pool | null = null;
+export class MisterioExecutorService implements OnModuleDestroy {
+  /** Pool restringido: SELECT en tablas del caso e INSERT en solucion. */
+  private playerPool: Pool | null = null;
 
-  constructor(private readonly configService: ConfigService) {}
+  constructor(
+    private readonly configService: ConfigService,
+    private readonly solutionService: MisterioSolutionService,
+  ) {}
 
-  private getPool(): Pool {
-    if (!this.pool) {
-      const sandboxDatabase = this.configService.get<string>(
-        SANDBOX_DATABASE_ENV,
-        DEFAULT_SANDBOX_DATABASE,
-      );
-
-      this.pool = createPool(
-        getMysqlSandboxPlayerPoolOptions(this.configService, sandboxDatabase),
-      );
-    }
-    return this.pool;
-  }
-
-  getSandboxDatabase(): string {
+  private getMisterioDatabaseName(): string {
     return this.configService.get<string>(
-      SANDBOX_DATABASE_ENV,
-      DEFAULT_SANDBOX_DATABASE,
+      MISTERIO_DATABASE_ENV,
+      DEFAULT_MISTERIO_DATABASE,
     );
   }
 
-  async execute(sql: string): Promise<SqlExecutionResult> {
-    const statement = this.applySelectRowLimit(this.validateAndNormalize(sql));
+  private getPlayerPool(): Pool {
+    if (!this.playerPool) {
+      this.playerPool = createPool(
+        getMysqlMisterioPlayerPoolOptions(
+          this.configService,
+          this.getMisterioDatabaseName(),
+        ),
+      );
+    }
+    return this.playerPool;
+  }
+
+  getMisterioDatabase(): string {
+    return this.configService.get<string>(
+      MISTERIO_DATABASE_ENV,
+      DEFAULT_MISTERIO_DATABASE,
+    );
+  }
+
+  async execute(sql: string): Promise<MisterioSqlExecutionResult> {
+    const statement = this.validateAndNormalize(sql);
+
+    if (isSolutionInsert(statement)) {
+      return this.executeSolutionInsert(statement);
+    }
+
+    const limitedStatement = this.applySelectRowLimit(statement);
 
     try {
-      const pool = this.getPool();
+      const pool = this.getPlayerPool();
       const [result, fields] = await pool.query<
         RowDataPacket[] | ResultSetHeader
-      >(statement);
+      >(limitedStatement);
 
       if (Array.isArray(result)) {
         const rows = result.map((row) => this.serializeRow(row));
@@ -103,10 +116,36 @@ export class SqlExecutorService implements OnModuleDestroy {
   }
 
   async onModuleDestroy() {
-    if (this.pool) {
-      await this.pool.end();
-      this.pool = null;
+    await this.playerPool?.end();
+    this.playerPool = null;
+  }
+
+  private async executeSolutionInsert(
+    statement: string,
+  ): Promise<MisterioSqlExecutionResult> {
+    const parsed = parseSolutionInsert(statement);
+    if (!parsed) {
+      throw new BadRequestException(
+        'Formato inválido. Usa: INSERT INTO solucion VALUES (1, \'Nombre del sospechoso\');',
+      );
     }
+
+    if (parsed.usuario !== 1) {
+      throw new BadRequestException(
+        'Para verificar tu respuesta usa usuario = 1 en la tabla solucion.',
+      );
+    }
+
+    const solutionCheck = this.solutionService.evaluate(parsed.valor);
+
+    return {
+      success: true,
+      rows: [],
+      rowCount: 0,
+      columns: [],
+      message: solutionCheck.mensaje,
+      solutionCheck,
+    };
   }
 
   private validateAndNormalize(sql: string): string {
@@ -141,13 +180,8 @@ export class SqlExecutorService implements OnModuleDestroy {
       );
     }
 
-    const checkTarget = sanitized
-      .replace(/'([^'\\]|\\.)*'/g, "''")
-      .replace(/"([^"\\]|\\.)*"/g, '""')
-      .replace(/`([^`\\]|\\.)*`/g, '``');
-
     try {
-      assertSandboxSqlAllowed(checkTarget);
+      assertMisterioSqlAllowed(sanitized);
     } catch (error) {
       const message =
         error instanceof Error ? error.message : 'Operación no permitida.';
@@ -175,7 +209,7 @@ export class SqlExecutorService implements OnModuleDestroy {
     return `${statement} LIMIT ${MAX_SELECT_ROWS}`;
   }
 
-  private mapColumns(fields?: FieldPacket[]): SqlColumnMeta[] {
+  private mapColumns(fields?: FieldPacket[]) {
     if (!fields?.length) return [];
     return fields.map((field) => ({
       name: field.name,

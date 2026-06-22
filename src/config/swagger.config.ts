@@ -14,6 +14,7 @@ export function setupSwagger(app: INestApplication): void {
     .addTag('actividades', 'Actividades de un módulo')
     .addTag('preguntas', 'Preguntas de actividades')
     .addTag('sql', 'Ejecución y validación SQL en sandbox')
+    .addTag('misterio', 'Juego SQL Murder Mystery (tesis_misterio)')
     .build();
 
   const document = SwaggerModule.createDocument(app, config);

@@ -29,15 +29,23 @@ export function getMysqlSslOptions(configService: ConfigService) {
   return { rejectUnauthorized };
 }
 
+export interface MysqlCredentials {
+  user: string;
+  password: string;
+}
+
 export function getMysqlPoolOptions(
   configService: ConfigService,
   database: string,
+  credentials?: MysqlCredentials,
 ): PoolOptions {
   return {
     host: configService.get<string>('MYSQL_HOST', 'localhost'),
     port: Number(configService.get<string>('MYSQL_PORT', '3306')),
-    user: configService.get<string>('MYSQL_USER', 'root'),
-    password: configService.get<string>('MYSQL_PASSWORD', ''),
+    user: credentials?.user ?? configService.get<string>('MYSQL_USER', 'root'),
+    password:
+      credentials?.password ??
+      configService.get<string>('MYSQL_PASSWORD', ''),
     database,
     waitForConnections: true,
     connectionLimit: getMysqlConnectionLimit(configService),
@@ -47,6 +55,58 @@ export function getMysqlPoolOptions(
     multipleStatements: false,
     ssl: getMysqlSslOptions(configService),
   };
+}
+
+export function getMysqlMisterioPlayerCredentials(
+  configService: ConfigService,
+): MysqlCredentials | undefined {
+  const user = configService.get<string>('MYSQL_MISTERIO_PLAYER_USER');
+  const password = configService.get<string>('MYSQL_MISTERIO_PLAYER_PASSWORD');
+
+  if (!user || !password) {
+    return undefined;
+  }
+
+  return { user, password };
+}
+
+export function getMysqlMisterioPlayerPoolOptions(
+  configService: ConfigService,
+  database: string,
+): PoolOptions {
+  const playerCredentials = getMysqlMisterioPlayerCredentials(configService);
+
+  if (playerCredentials) {
+    return getMysqlPoolOptions(configService, database, playerCredentials);
+  }
+
+  return getMysqlPoolOptions(configService, database);
+}
+
+export function getMysqlSandboxPlayerCredentials(
+  configService: ConfigService,
+): MysqlCredentials | undefined {
+  const user = configService.get<string>('MYSQL_SANDBOX_PLAYER_USER');
+  const password = configService.get<string>('MYSQL_SANDBOX_PLAYER_PASSWORD');
+
+  if (!user || !password) {
+    return undefined;
+  }
+
+  return { user, password };
+}
+
+export function getMysqlSandboxPlayerPoolOptions(
+  configService: ConfigService,
+  database: string,
+): PoolOptions {
+  const playerCredentials = getMysqlSandboxPlayerCredentials(configService);
+
+  if (playerCredentials) {
+    return getMysqlPoolOptions(configService, database, playerCredentials);
+  }
+
+  return getMysqlPoolOptions(configService, database);
 }
 
 export function getPrismaMariaDbConfig(configService: ConfigService) {

@@ -1,0 +1,19 @@
+{
+  "respuestas": [
+    {
+      "nombre": "Jeremías Bowers",
+      "Descripcion": "¡Enhorabuena, has encontrado al asesino! Pero espera, aún hay más... Si te animas a un reto, intenta consultar la transcripción de la entrevista del asesino para descubrir al verdadero culpable. Si tienes mucha confianza en tus habilidades con SQL, intenta completar este último paso con no más de dos consultas. Usa la misma instrucción INSERT con tu nuevo sospechoso para comprobar tu respuesta.",
+      "etapa": 1
+    },
+    {
+      "nombre": "Jeremy Bowers",
+      "Descripcion": "¡Enhorabuena, has encontrado al asesino! Pero espera, aún hay más... Si te animas a un reto, intenta consultar la transcripción de la entrevista del asesino para descubrir al verdadero culpable. Si tienes mucha confianza en tus habilidades con SQL, intenta completar este último paso con no más de dos consultas. Usa la misma instrucción INSERT con tu nuevo sospechoso para comprobar tu respuesta.",
+      "etapa": 1
+    },
+    {
+      "nombre": "Miranda Prestigio",
+      "Descripcion": "¡Felicidades, encontraste a la mente detrás del asesinato! Todos en Ciudad SQL te celebran como el mejor detective SQL de todos los tiempos.",
+      "etapa": 2
+    }
+  ]
+}

@@ -8,6 +8,7 @@ import { ActividadesModule } from './actividades/actividades.module';
 import { PreguntasModule } from './preguntas/preguntas.module';
 import { SqlExecutorModule } from './sql-executor/sql-executor.module';
 import { SqlValidationModule } from './sql-validation/sql-validation.module';
+import { MisterioModule } from './misterio/misterio.module';
 
 @Module({
   imports: [
@@ -19,6 +20,7 @@ import { SqlValidationModule } from './sql-validation/sql-validation.module';
     PreguntasModule,
     SqlExecutorModule,
     SqlValidationModule,
+    MisterioModule,
   ],
   controllers: [AppController],
 })
