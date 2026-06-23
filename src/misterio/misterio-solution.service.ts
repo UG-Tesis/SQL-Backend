@@ -27,7 +27,14 @@ export function resolveMisterioSolutionsPath(): string {
   const candidates = [
     join(__dirname, 'data', MISTERIO_SOLUTIONS_FILE),
     join(process.cwd(), 'src', 'misterio', 'data', MISTERIO_SOLUTIONS_FILE),
-    join(process.cwd(), 'dist', 'src', 'misterio', 'data', MISTERIO_SOLUTIONS_FILE),
+    join(
+      process.cwd(),
+      'dist',
+      'src',
+      'misterio',
+      'data',
+      MISTERIO_SOLUTIONS_FILE,
+    ),
     join(process.cwd(), 'dist', 'misterio', 'data', MISTERIO_SOLUTIONS_FILE),
   ];
 
@@ -75,10 +82,6 @@ export class MisterioSolutionService implements OnModuleInit {
   }
 
   normalizePersonName(name: string): string {
-    return name
-      .trim()
-      .normalize('NFD')
-      .replace(/\p{M}/gu, '')
-      .toLowerCase();
+    return name.trim().normalize('NFD').replace(/\p{M}/gu, '').toLowerCase();
   }
 }

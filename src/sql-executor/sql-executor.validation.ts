@@ -46,7 +46,8 @@ export const SANDBOX_DDL_FORBIDDEN_RULES: SqlValidationRule[] = [
       'No está permitido crear, modificar ni eliminar tablas en el sandbox.',
   },
   {
-    pattern: /\b(?:CREATE|DROP|ALTER)\s+(?:VIEW|INDEX|TRIGGER|PROCEDURE|FUNCTION|EVENT)\b/i,
+    pattern:
+      /\b(?:CREATE|DROP|ALTER)\s+(?:VIEW|INDEX|TRIGGER|PROCEDURE|FUNCTION|EVENT)\b/i,
     message: 'No está permitido modificar objetos del esquema en el sandbox.',
   },
 ];

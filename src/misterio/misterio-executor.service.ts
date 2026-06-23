@@ -11,9 +11,7 @@ import type {
   RowDataPacket,
 } from 'mysql2/promise';
 import { createPool } from 'mysql2/promise';
-import {
-  getMysqlMisterioPlayerPoolOptions,
-} from '../config/mysql.config';
+import { getMysqlMisterioPlayerPoolOptions } from '../config/mysql.config';
 import type { SqlExecutionResult } from '../sql-executor/sql-executor.service';
 import {
   MisterioSolutionService,
@@ -120,13 +118,11 @@ export class MisterioExecutorService implements OnModuleDestroy {
     this.playerPool = null;
   }
 
-  private async executeSolutionInsert(
-    statement: string,
-  ): Promise<MisterioSqlExecutionResult> {
+  private executeSolutionInsert(statement: string): MisterioSqlExecutionResult {
     const parsed = parseSolutionInsert(statement);
     if (!parsed) {
       throw new BadRequestException(
-        'Formato inválido. Usa: INSERT INTO solucion VALUES (1, \'Nombre del sospechoso\');',
+        "Formato inválido. Usa: INSERT INTO solucion VALUES (1, 'Nombre del sospechoso');",
       );
     }
 

@@ -74,14 +74,11 @@ export class MisterioController {
       example: {
         correct: true,
         etapa: 1,
-        mensaje:
-          '¡Felicidades, encontraste al asesino! Pero espera, hay más…',
+        mensaje: '¡Felicidades, encontraste al asesino! Pero espera, hay más…',
       },
     },
   })
-  verificarSolucion(
-    @Body() dto: VerificarSolucionDto,
-  ): MisterioSolutionCheck {
+  verificarSolucion(@Body() dto: VerificarSolucionDto): MisterioSolutionCheck {
     return this.solutionService.evaluate(dto.nombre);
   }
 }

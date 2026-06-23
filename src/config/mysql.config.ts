@@ -44,8 +44,7 @@ export function getMysqlPoolOptions(
     port: Number(configService.get<string>('MYSQL_PORT', '3306')),
     user: credentials?.user ?? configService.get<string>('MYSQL_USER', 'root'),
     password:
-      credentials?.password ??
-      configService.get<string>('MYSQL_PASSWORD', ''),
+      credentials?.password ?? configService.get<string>('MYSQL_PASSWORD', ''),
     database,
     waitForConnections: true,
     connectionLimit: getMysqlConnectionLimit(configService),

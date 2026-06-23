@@ -4,7 +4,8 @@ import { IsNotEmpty, IsString, MaxLength } from 'class-validator';
 export class VerificarSolucionDto {
   @ApiProperty({
     example: 'Jeremías Bowers',
-    description: 'Nombre del sospechoso que el estudiante cree responsable del crimen',
+    description:
+      'Nombre del sospechoso que el estudiante cree responsable del crimen',
   })
   @IsString()
   @IsNotEmpty()
