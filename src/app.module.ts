@@ -9,6 +9,7 @@ import { PreguntasModule } from './preguntas/preguntas.module';
 import { SqlExecutorModule } from './sql-executor/sql-executor.module';
 import { SqlValidationModule } from './sql-validation/sql-validation.module';
 import { MisterioModule } from './misterio/misterio.module';
+import { IslandModule } from './island/island.module';
 
 @Module({
   imports: [
@@ -21,6 +22,7 @@ import { MisterioModule } from './misterio/misterio.module';
     SqlExecutorModule,
     SqlValidationModule,
     MisterioModule,
+    IslandModule,
   ],
   controllers: [AppController],
 })
