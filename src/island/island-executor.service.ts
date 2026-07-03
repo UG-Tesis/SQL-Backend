@@ -16,7 +16,9 @@ import {
   type IslandStepDefinition,
 } from './data/island-missions.data';
 import { IslandMissionValidatorService } from './island-mission-validator.service';
+import type { IslandStepValidationError } from './island-step-validation.types';
 import { IslandSessionService } from './island-session.service';
+import { parseIslandPlayerSql } from './island-sql-normalize';
 import { assertIslandSqlAllowed } from './island.validation';
 
 export interface IslandMissionProgress {
@@ -284,7 +286,7 @@ export class IslandExecutorService {
 
         const validationError = await this.missionValidator.validateStep(
           step,
-          statement,
+          sql.trim(),
           async (query) => {
             const [rows, fields] =
               await connection.query<RowDataPacket[]>(query);
@@ -294,9 +296,6 @@ export class IslandExecutorService {
               columns: this.mapColumns(fields),
             };
           },
-          isSelect
-            ? { rows: execution.rows, rowCount: execution.rowCount }
-            : undefined,
         );
 
         if (validationError) {
@@ -355,13 +354,21 @@ export class IslandExecutorService {
     stepIndex: number,
     step: IslandStepDefinition,
     execution: SqlExecutionResult | undefined,
-    message: string,
+    failure: IslandStepValidationError | string,
   ): IslandActionResult {
+    const message = typeof failure === 'string' ? failure : failure.message;
+
     const failureCount = this.sessionService.recordStepFailure(
       sessionId,
       stepIndex,
     );
-    const hintText = getIslandStepHint(stepIndex) ?? step.hint;
+    const fullHint = getIslandStepHint(stepIndex) ?? step.hint;
+    const specificHint = typeof failure !== 'string' ? failure.hint : undefined;
+    const resolvedFullHint = specificHint ?? fullHint;
+    const hint =
+      failureCount >= ISLAND_HINT_AFTER_FAILURES && resolvedFullHint
+        ? resolvedFullHint
+        : undefined;
 
     return {
       success: false,
@@ -373,10 +380,7 @@ export class IslandExecutorService {
       stepComplete: false,
       gameComplete: false,
       failureCount,
-      hint:
-        failureCount >= ISLAND_HINT_AFTER_FAILURES && hintText
-          ? hintText
-          : undefined,
+      hint,
       progress: this.buildProgress(stepIndex),
       nextStepIndex: null,
     };
@@ -481,42 +485,30 @@ export class IslandExecutorService {
   }
 
   private validateAndNormalize(sql: string): string {
-    const trimmed = sql.trim();
-    if (!trimmed) {
-      throw new BadRequestException('La sentencia SQL no puede estar vacía.');
-    }
-
-    if (trimmed.length > 4000) {
+    if (sql.trim().length > 4000) {
       throw new BadRequestException(
         'La sentencia SQL supera el tamaño permitido.',
       );
     }
 
-    const withoutComments = trimmed
-      .replace(/--.*$/gm, '')
-      .replace(/\/\*[\s\S]*?\*\//g, '')
-      .trim();
-
-    const sanitized = withoutComments.replace(/;+\s*$/g, '').trim();
-    if (!sanitized) {
-      throw new BadRequestException('La sentencia SQL no puede estar vacía.');
-    }
-
-    if (sanitized.includes(';')) {
-      throw new BadRequestException(
-        'Solo se permite ejecutar una sentencia SQL a la vez.',
-      );
+    let statement: string;
+    try {
+      statement = parseIslandPlayerSql(sql);
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : 'Sentencia SQL no válida.';
+      throw new BadRequestException(message);
     }
 
     try {
-      assertIslandSqlAllowed(sanitized);
+      assertIslandSqlAllowed(statement);
     } catch (error) {
       const message =
         error instanceof Error ? error.message : 'Operación no permitida.';
       throw new BadRequestException(message);
     }
 
-    return sanitized;
+    return statement;
   }
 
   private applySelectRowLimit(statement: string): string {

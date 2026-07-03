@@ -10,47 +10,68 @@ describe('IslandMissionValidatorService', () => {
     solution: "SELECT habitante_id FROM habitante WHERE estado = 'amigable'",
   };
 
-  it('reutiliza el resultado del jugador y solo ejecuta la solución', async () => {
-    const executed: string[] = [];
-    const runQuery = jest.fn((sql: string) => {
-      executed.push(sql);
-      return Promise.resolve({
-        rows: [{ habitante_id: 1 }],
-        rowCount: 1,
-      });
-    });
-
-    const playerResult = {
-      rows: [{ habitante_id: 1 }],
-      rowCount: 1,
-    };
+  it('acepta la consulta oficial con variación de mayúsculas y punto y coma', async () => {
+    const runQuery = jest.fn();
 
     const error = await validator.validateStep(
       selectStep,
-      "SELECT habitante_id FROM habitante WHERE estado = 'amigable'",
+      "select habitante_id from habitante where estado = 'amigable';",
       runQuery,
-      playerResult,
     );
 
     expect(error).toBeNull();
-    expect(runQuery).toHaveBeenCalledTimes(1);
-    expect(executed).toEqual([selectStep.solution]);
+    expect(runQuery).not.toHaveBeenCalled();
   });
 
-  it('ejecuta jugador y solución si no hay resultado precargado', async () => {
+  it('rechaza consultas distintas y pide pista inmediata', async () => {
+    const error = await validator.validateStep(
+      selectStep,
+      "SELECT * FROM habitante WHERE estado = 'amigable';",
+      jest.fn(),
+    );
+
+    expect(error?.showStepHint).toBe(true);
+    expect(error?.message).toContain('columnas');
+    expect(error?.hint).toContain('SELECT habitante_id FROM habitante');
+  });
+
+  it('rechaza formato inválido sin activar pista del paso', async () => {
+    const error = await validator.validateStep(
+      selectStep,
+      "SELECT habitante_id FROM habitante WHERE estado = 'amigable'",
+      jest.fn(),
+    );
+
+    expect(error).toEqual({
+      message: 'Termina la sentencia con punto y coma (;).',
+      showStepHint: false,
+    });
+  });
+
+  it('verifica el efecto DML tras coincidencia de texto', async () => {
+    const dmlStep: IslandStepDefinition = {
+      narrative: 'test',
+      kind: 'dml',
+      solution: "DELETE FROM habitante WHERE nombre = 'Dieter Sucio'",
+      verificationQuery:
+        "SELECT * FROM habitante WHERE nombre = 'Dieter Sucio'",
+      verificationCount: 0,
+    };
+
     const runQuery = jest.fn(() =>
       Promise.resolve({
-        rows: [{ habitante_id: 1 }],
-        rowCount: 1,
+        rows: [],
+        rowCount: 0,
       }),
     );
 
-    await validator.validateStep(
-      selectStep,
-      "SELECT habitante_id FROM habitante WHERE estado = 'amigable'",
+    const error = await validator.validateStep(
+      dmlStep,
+      "DELETE FROM habitante WHERE nombre = 'Dieter Sucio';",
       runQuery,
     );
 
-    expect(runQuery).toHaveBeenCalledTimes(2);
+    expect(error).toBeNull();
+    expect(runQuery).toHaveBeenCalledWith(dmlStep.verificationQuery);
   });
 });

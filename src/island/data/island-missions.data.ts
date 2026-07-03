@@ -1,3 +1,5 @@
+import { formatIslandExpectedHint } from '../island-sql-normalize';
+
 export const ISLAND_DATABASE_ENV = 'MYSQL_ISLAND_DATABASE';
 export const DEFAULT_ISLAND_DATABASE = 'tesis_island';
 
@@ -19,7 +21,7 @@ export interface IslandStepDefinition {
   /** Si es true, el paso se completa con Continuar (opcionalmente ejecuta demoSql) */
   autoComplete?: boolean;
   demoSql?: string | string[];
-  /** Consulta esperada para validar SELECT (se comparan filas, ignorando ORDER BY salvo que se indique) */
+  /** Consulta esperada: el jugador debe escribir esta sentencia (con ; al final). */
   solution?: string;
   preserveOrder?: boolean;
   /** Para DML: consulta de verificación y número de filas esperadas */
@@ -383,45 +385,6 @@ export const ISLAND_MISSIONS: IslandMissionDefinition[] = [
   },
 ];
 
-/** Pistas por índice de paso (misma orden que getIslandFlatSteps) */
-export const ISLAND_FLAT_HINTS: (string | undefined)[] = [
-  undefined,
-  'Usa SELECT * FROM habitante para ver toda la tabla.',
-  "Filtra con WHERE profesion = 'Carnicero'.",
-  "Filtra con WHERE estado = 'amigable'.",
-  "Combina profesion = 'Armero' AND estado = 'amigable'.",
-  "Prueba profesion LIKE '%herrero' AND estado = 'amigable'.",
-  undefined,
-  "SELECT habitante_id FROM habitante WHERE nombre = 'Extranjero'.",
-  "SELECT oro FROM habitante WHERE nombre = 'Extranjero'.",
-  'Usa WHERE propietario IS NULL en la tabla objeto.',
-  undefined,
-  'UPDATE objeto SET propietario = 20 WHERE propietario IS NULL.',
-  'SELECT * FROM objeto WHERE propietario = 20.',
-  "Usa paréntesis: (profesion = 'Mercader' OR profesion = 'Comerciante') AND estado = 'amigable'.",
-  "UPDATE objeto SET propietario = 15 WHERE nombre = 'Tetera' OR nombre = 'Anillo'.",
-  undefined,
-  "UPDATE habitante SET nombre = 'Pedro' WHERE habitante_id = 20.",
-  "SELECT * FROM habitante WHERE profesion = 'Panadero' ORDER BY oro DESC.",
-  undefined,
-  undefined,
-  undefined,
-  "SELECT * FROM habitante WHERE profesion = 'Piloto'.",
-  undefined,
-  "Une pueblo.jefe con habitante.habitante_id; filtra pueblo.nombre = 'Villa Cebolla'.",
-  undefined,
-  "COUNT(*) con JOIN a pueblo, Villa Cebolla y genero = 'f'.",
-  "SELECT habitante.nombre con JOIN, Villa Cebolla y genero = 'f'.",
-  undefined,
-  "SUM(habitante.oro) con OR para Mercader, Comerciante y Panadero.",
-  undefined,
-  'SELECT estado, AVG(habitante.oro) FROM habitante GROUP BY estado.',
-  undefined,
-  "DELETE FROM habitante WHERE nombre = 'Dorotea Sucia'.",
-  "UPDATE habitante SET estado = 'amigable' WHERE profesion = 'Piloto'.",
-  "UPDATE habitante SET estado = 'emigrado' WHERE habitante_id = 20.",
-];
-
 export function getIslandFlatSteps(): IslandStepDefinition[] {
   return ISLAND_MISSIONS.flatMap((mission) => mission.steps);
 }
@@ -449,7 +412,11 @@ export function getIslandStep(stepIndex: number): IslandStepDefinition | null {
 }
 
 export function getIslandStepHint(stepIndex: number): string | undefined {
-  return ISLAND_FLAT_HINTS[stepIndex] ?? getIslandStep(stepIndex)?.hint;
+  const step = getIslandStep(stepIndex);
+  if (!step?.solution || step.autoComplete) {
+    return undefined;
+  }
+  return formatIslandExpectedHint(step.solution);
 }
 
 export function getIslandMissionProgress(stepIndex: number): {
