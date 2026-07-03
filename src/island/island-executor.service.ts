@@ -11,6 +11,8 @@ import {
   getIslandMissionProgress,
   getIslandStep,
   getIslandStepCount,
+  getIslandStepHint,
+  ISLAND_HINT_AFTER_FAILURES,
   type IslandStepDefinition,
 } from './data/island-missions.data';
 import { IslandMissionValidatorService } from './island-mission-validator.service';
@@ -36,7 +38,8 @@ export interface IslandActionResult extends SqlExecutionResult {
   answer?: string;
   followUp?: string;
   hint?: string;
-  demoSql?: string;
+  demoSql?: string | string[];
+  failureCount?: number;
   progress: IslandMissionProgress | null;
   nextStepIndex: number | null;
 }
@@ -182,6 +185,7 @@ export class IslandExecutorService {
 
       await connection.query('SET FOREIGN_KEY_CHECKS = 1');
       await connection.commit();
+      this.sessionService.resetStepFailures(sessionId);
       return {
         success: true,
         sessionId,
@@ -222,8 +226,13 @@ export class IslandExecutorService {
     };
 
     if (step.demoSql) {
-      const isSelect = /^\s*SELECT\b/i.test(step.demoSql.trim());
-      execution = await this.runStatement(sessionId, step.demoSql, isSelect);
+      const statements = Array.isArray(step.demoSql)
+        ? step.demoSql
+        : [step.demoSql];
+      for (const sql of statements) {
+        const isSelect = /^\s*SELECT\b/i.test(sql.trim());
+        execution = await this.runStatement(sessionId, sql, isSelect);
+      }
     }
 
     return this.buildStepSuccess(stepIndex, step, execution);
@@ -236,89 +245,141 @@ export class IslandExecutorService {
   ): Promise<IslandActionResult> {
     const step = this.getValidStep(stepIndex);
 
-    if (step.autoComplete) {
-      throw new BadRequestException(
-        'Este paso se completa con el botón Continuar.',
-      );
-    }
-
-    const statement = this.validateAndNormalize(sql);
-    const isSelect = /^\s*SELECT\b/i.test(statement);
-    const isDml = !isSelect;
-
-    if (step.kind === 'select' && !isSelect) {
-      throw new BadRequestException('Este paso requiere una consulta SELECT.');
-    }
-
-    if (step.kind === 'dml' && isSelect) {
-      throw new BadRequestException(
-        'Este paso requiere INSERT, UPDATE o DELETE.',
-      );
-    }
-
-    const pool = this.sessionService.getSessionPool(sessionId);
-    const connection = await pool.getConnection();
-
     try {
-      if (isDml) {
-        await connection.beginTransaction();
+      if (step.autoComplete) {
+        throw new BadRequestException(
+          'Este paso se completa con el botón Continuar.',
+        );
       }
 
-      const execution = await this.runStatementOnConnection(
-        connection,
-        statement,
-        isSelect,
-      );
+      const statement = this.validateAndNormalize(sql);
+      const isSelect = /^\s*SELECT\b/i.test(statement);
+      const isDml = !isSelect;
 
-      const validationError = await this.missionValidator.validateStep(
-        step,
-        statement,
-        async (query) => {
-          const [rows, fields] = await connection.query<RowDataPacket[]>(query);
-          return {
-            rows: rows.map((row) => this.serializeRow(row)),
-            rowCount: rows.length,
-            columns: this.mapColumns(fields),
-          };
-        },
-        isSelect
-          ? { rows: execution.rows, rowCount: execution.rowCount }
-          : undefined,
-      );
-
-      if (validationError) {
-        if (isDml) {
-          await connection.rollback();
-        }
-        return {
-          ...execution,
-          code: -1,
-          success: false,
-          message: validationError,
-          stepComplete: false,
-          gameComplete: false,
-          progress: this.buildProgress(stepIndex),
-          nextStepIndex: null,
-        };
+      if (step.kind === 'select' && !isSelect) {
+        throw new BadRequestException(
+          'Este paso requiere una consulta SELECT.',
+        );
       }
 
-      if (isDml) {
-        await connection.commit();
+      if (step.kind === 'dml' && isSelect) {
+        throw new BadRequestException(
+          'Este paso requiere INSERT, UPDATE o DELETE.',
+        );
       }
 
-      return this.buildStepSuccess(stepIndex, step, execution);
-    } catch (error) {
+      const pool = this.sessionService.getSessionPool(sessionId);
+      const connection = await pool.getConnection();
+
       try {
-        await connection.rollback();
-      } catch {
-        /* ignore */
+        if (isDml) {
+          await connection.beginTransaction();
+        }
+
+        const execution = await this.runStatementOnConnection(
+          connection,
+          statement,
+          isSelect,
+        );
+
+        const validationError = await this.missionValidator.validateStep(
+          step,
+          statement,
+          async (query) => {
+            const [rows, fields] =
+              await connection.query<RowDataPacket[]>(query);
+            return {
+              rows: rows.map((row) => this.serializeRow(row)),
+              rowCount: rows.length,
+              columns: this.mapColumns(fields),
+            };
+          },
+          isSelect
+            ? { rows: execution.rows, rowCount: execution.rowCount }
+            : undefined,
+        );
+
+        if (validationError) {
+          if (isDml) {
+            await connection.rollback();
+          }
+          return this.buildStepFailure(
+            sessionId,
+            stepIndex,
+            step,
+            execution,
+            validationError,
+          );
+        }
+
+        if (isDml) {
+          await connection.commit();
+        }
+
+        this.sessionService.clearStepFailure(sessionId, stepIndex);
+        return this.buildStepSuccess(stepIndex, step, execution);
+      } catch (error) {
+        try {
+          await connection.rollback();
+        } catch {
+          /* ignore */
+        }
+        throw error;
+      } finally {
+        connection.release();
       }
+    } catch (error) {
       const message =
-        error instanceof Error ? error.message : 'Error al ejecutar SQL';
+        error instanceof BadRequestException
+          ? error.message
+          : error instanceof Error
+            ? error.message
+            : 'Error al ejecutar SQL';
+
+      if (error instanceof BadRequestException) {
+        return this.buildStepFailure(
+          sessionId,
+          stepIndex,
+          step,
+          undefined,
+          message,
+        );
+      }
+
       throw new BadRequestException(message);
-    } finally {
-      connection.release();
     }
+  }
+
+  private buildStepFailure(
+    sessionId: string,
+    stepIndex: number,
+    step: IslandStepDefinition,
+    execution: SqlExecutionResult | undefined,
+    message: string,
+  ): IslandActionResult {
+    const failureCount = this.sessionService.recordStepFailure(
+      sessionId,
+      stepIndex,
+    );
+    const hintText = getIslandStepHint(stepIndex) ?? step.hint;
+
+    return {
+      success: false,
+      rows: execution?.rows ?? [],
+      rowCount: execution?.rowCount ?? 0,
+      columns: execution?.columns ?? [],
+      message,
+      code: -1,
+      stepComplete: false,
+      gameComplete: false,
+      failureCount,
+      hint:
+        failureCount >= ISLAND_HINT_AFTER_FAILURES && hintText
+          ? hintText
+          : undefined,
+      progress: this.buildProgress(stepIndex),
+      nextStepIndex: null,
+    };
   }
 
   private buildStepSuccess(

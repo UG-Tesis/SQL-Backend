@@ -18,6 +18,7 @@ interface IslandSessionRecord {
   pool: Pool;
   databaseName: string;
   lastActivityAt: number;
+  stepFailures: Map<number, number>;
 }
 
 const DEFAULT_SESSION_TTL_MS = 2 * 60 * 60 * 1000;
@@ -63,9 +64,22 @@ export class IslandSessionService implements OnModuleInit, OnModuleDestroy {
       pool,
       databaseName,
       lastActivityAt: Date.now(),
+      stepFailures: new Map(),
     });
 
     return { sessionId, databaseName };
+  }
+
+  resumeSession(sessionId: string): { success: true; sessionId: string } {
+    assertValidIslandSessionId(sessionId);
+    if (!this.hasSession(sessionId)) {
+      throw new NotFoundException(
+        'La sesión de juego no existe o ya expiró. Vuelve a abrir SQL Island.',
+      );
+    }
+
+    this.touchSession(sessionId);
+    return { success: true, sessionId };
   }
 
   getSessionPool(sessionId: string): Pool {
@@ -90,6 +104,31 @@ export class IslandSessionService implements OnModuleInit, OnModuleDestroy {
     if (session) {
       session.lastActivityAt = Date.now();
     }
+  }
+
+  recordStepFailure(sessionId: string, stepIndex: number): number {
+    assertValidIslandSessionId(sessionId);
+    const session = this.sessions.get(sessionId);
+    if (!session) {
+      throw new NotFoundException(
+        'La sesión de juego no existe o ya expiró. Vuelve a abrir SQL Island.',
+      );
+    }
+
+    session.lastActivityAt = Date.now();
+    const nextCount = (session.stepFailures.get(stepIndex) ?? 0) + 1;
+    session.stepFailures.set(stepIndex, nextCount);
+    return nextCount;
+  }
+
+  clearStepFailure(sessionId: string, stepIndex: number): void {
+    const session = this.sessions.get(sessionId);
+    session?.stepFailures.delete(stepIndex);
+  }
+
+  resetStepFailures(sessionId: string): void {
+    const session = this.sessions.get(sessionId);
+    session?.stepFailures.clear();
   }
 
   async closeSession(sessionId: string): Promise<void> {

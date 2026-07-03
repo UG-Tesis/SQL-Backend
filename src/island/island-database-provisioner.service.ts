@@ -59,6 +59,8 @@ export class IslandDatabaseProvisionerService implements OnModuleDestroy {
       const template = quoteMysqlIdentifier(templateDb);
       const target = quoteMysqlIdentifier(sessionDb);
 
+      await connection.beginTransaction();
+
       for (const table of getIslandTemplateTables()) {
         const tableId = quoteMysqlIdentifier(table);
         await connection.query(
@@ -86,8 +88,11 @@ export class IslandDatabaseProvisionerService implements OnModuleDestroy {
           FOREIGN KEY (jefe) REFERENCES ${target}.${quoteMysqlIdentifier('habitante')} (habitante_id)`,
       );
 
+      await connection.commit();
+
       return sessionDb;
     } catch (error) {
+      await connection.rollback().catch(() => undefined);
       await this.dropSessionDatabase(sessionId).catch(() => undefined);
       throw error;
     } finally {

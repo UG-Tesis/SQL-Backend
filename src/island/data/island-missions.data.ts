@@ -3,6 +3,9 @@ export const DEFAULT_ISLAND_DATABASE = 'tesis_island';
 
 export const ISLAND_PLAYER_ID = 20;
 
+/** Tras cuántos intentos fallidos se revela la pista del paso */
+export const ISLAND_HINT_AFTER_FAILURES = 3;
+
 export type IslandStepKind = 'narrative' | 'select' | 'dml';
 
 export interface IslandStepDefinition {
@@ -15,7 +18,7 @@ export interface IslandStepDefinition {
   kind: IslandStepKind;
   /** Si es true, el paso se completa con Continuar (opcionalmente ejecuta demoSql) */
   autoComplete?: boolean;
-  demoSql?: string;
+  demoSql?: string | string[];
   /** Consulta esperada para validar SELECT (se comparan filas, ignorando ORDER BY salvo que se indique) */
   solution?: string;
   preserveOrder?: boolean;
@@ -99,12 +102,11 @@ export const ISLAND_MISSIONS: IslandMissionDefinition[] = [
       {
         narrative:
           'Hola forastero, ¿adónde vas? Soy Pablo, alcalde de Ciudad Mono. Te registraré como habitante de mi pueblo.',
-        kind: 'dml',
-        solution:
+        kind: 'narrative',
+        autoComplete: true,
+        demoSql:
           "INSERT INTO habitante (nombre, pueblo_id, genero, profesion, oro, estado) VALUES ('Extranjero', 1, '?', '?', 0, '?')",
-        verificationQuery:
-          "SELECT * FROM habitante WHERE nombre = 'Extranjero'",
-        verificationCount: 1,
+        answer: 'Listo. Ya figuras registrado en Ciudad Mono.',
         followUp:
           '¡Oye, no me llames Forastero! Bueno… ¿cuál es mi habitante_id? (Pista: usa SELECT con columnas concretas, no *.)',
       },
@@ -115,15 +117,30 @@ export const ISLAND_MISSIONS: IslandMissionDefinition[] = [
           "SELECT habitante_id FROM habitante WHERE nombre = 'Extranjero'",
       },
       {
-        narrative:
-          'No tengo oro y no quiero trabajar todavía. Vi objetos sin dueño por la isla. Lista los objetos cuyo propietario sea NULL.',
+        narrative: '¡Hola, Ernesto! ¿Cuánto cuesta una espada?',
         kind: 'select',
-        solution: 'SELECT * FROM objeto WHERE propietario IS NULL',
-        answer: '¡Tantas cosas útiles!',
+        solution: "SELECT oro FROM habitante WHERE nombre = 'Extranjero'",
+        followUp:
+          '¡Maldición! Sin monedas, sin diversión. Debe haber otra forma de ganar oro sin ir a trabajar todavía. ¡Quizá pueda recoger objetos sin dueño y venderlos!',
       },
       {
         narrative:
-          '¿Hay algún truco para reclamar de una vez todos los objetos sin dueño?',
+          'Vi objetos sin dueño por la isla. Lista los objetos cuyo propietario sea NULL.',
+        kind: 'select',
+        solution: 'SELECT * FROM objeto WHERE propietario IS NULL',
+        answer: '¡Tantas cosas útiles! ¡Genial, una taza de café!',
+        followUp: 'Voy a recogerla.',
+      },
+      {
+        narrative: 'Recoges la taza de café.',
+        kind: 'narrative',
+        autoComplete: true,
+        demoSql:
+          "UPDATE objeto SET propietario = 20 WHERE nombre = 'Taza de café'",
+      },
+      {
+        narrative:
+          '¿Hay algún truco para reclamar de una vez el resto de objetos sin dueño?',
         kind: 'dml',
         solution:
           'UPDATE objeto SET propietario = 20 WHERE propietario IS NULL',
@@ -186,25 +203,30 @@ export const ISLAND_MISSIONS: IslandMissionDefinition[] = [
           "SELECT * FROM habitante WHERE profesion = 'Panadero' ORDER BY oro DESC",
         preserveOrder: true,
         answer: '¡Ah, Pablo! ¡Lo conozco!',
-        followUp:
-          '(Ocho horas después…) ¡Diez mil panes! Renuncio. Ya tengo oro para la espada.',
       },
       {
-        narrative: 'Pagas 150 de oro por la espada tras ganar 100 trabajando.',
+        narrative:
+          '¡Hola otra vez! Así que te llamas Pedro. Vi que quieres trabajar de panadero. ¡De acuerdo! Te pagaré 1 de oro por cada 100 panes.',
         kind: 'narrative',
         autoComplete: true,
-        demoSql:
-          'UPDATE habitante SET oro = oro + 100 - 150 WHERE habitante_id = 20',
       },
       {
-        narrative: 'Registra mi nueva espada como objeto que me pertenece.',
-        kind: 'dml',
-        solution:
+        narrative:
+          '(Ocho horas después…) ¡He hecho diez mil panes! Renuncio. Debería tener oro suficiente para la espada. Veamos qué pasa con mi saldo.',
+        kind: 'narrative',
+        autoComplete: true,
+      },
+      {
+        narrative: '¡Ernesto! Aquí tienes los 150 de oro por la espada.',
+        kind: 'narrative',
+        autoComplete: true,
+        demoSql: [
+          'UPDATE habitante SET oro = oro + 100 - 150 WHERE habitante_id = 20',
           "INSERT INTO objeto (nombre, propietario) VALUES ('Espada', 20)",
-        verificationQuery:
-          "SELECT * FROM objeto WHERE nombre = 'Espada' AND propietario = 20",
-        verificationCount: 1,
-        answer: '¡Tu espada está lista! Ahora puedes ir a cualquier parte.',
+        ],
+        answer:
+          '¡Aquí tienes tu nueva espada, Pedro! Ahora puedes ir a cualquier parte.',
+        followUp: '¡Gracias, Ernesto!',
       },
     ],
   },
@@ -222,8 +244,9 @@ export const ISLAND_MISSIONS: IslandMissionDefinition[] = [
       {
         narrative:
           '¡Dieter Sucio tiene al piloto prisionero! Te enseño un truco: averigua en qué pueblo vive Dieter Sucio uniendo pueblo y habitante.',
-        kind: 'select',
-        solution:
+        kind: 'narrative',
+        autoComplete: true,
+        demoSql:
           "SELECT pueblo.nombre FROM pueblo, habitante WHERE pueblo.pueblo_id = habitante.pueblo_id AND habitante.nombre = 'Dieter Sucio'",
         followUp:
           'Así se hace un JOIN. Ahora busca al jefe de Villa Cebolla: en pueblo.jefe está el habitante_id del jefe.',
@@ -360,6 +383,45 @@ export const ISLAND_MISSIONS: IslandMissionDefinition[] = [
   },
 ];
 
+/** Pistas por índice de paso (misma orden que getIslandFlatSteps) */
+export const ISLAND_FLAT_HINTS: (string | undefined)[] = [
+  undefined,
+  'Usa SELECT * FROM habitante para ver toda la tabla.',
+  "Filtra con WHERE profesion = 'Carnicero'.",
+  "Filtra con WHERE estado = 'amigable'.",
+  "Combina profesion = 'Armero' AND estado = 'amigable'.",
+  "Prueba profesion LIKE '%herrero' AND estado = 'amigable'.",
+  undefined,
+  "SELECT habitante_id FROM habitante WHERE nombre = 'Extranjero'.",
+  "SELECT oro FROM habitante WHERE nombre = 'Extranjero'.",
+  'Usa WHERE propietario IS NULL en la tabla objeto.',
+  undefined,
+  'UPDATE objeto SET propietario = 20 WHERE propietario IS NULL.',
+  'SELECT * FROM objeto WHERE propietario = 20.',
+  "Usa paréntesis: (profesion = 'Mercader' OR profesion = 'Comerciante') AND estado = 'amigable'.",
+  "UPDATE objeto SET propietario = 15 WHERE nombre = 'Tetera' OR nombre = 'Anillo'.",
+  undefined,
+  "UPDATE habitante SET nombre = 'Pedro' WHERE habitante_id = 20.",
+  "SELECT * FROM habitante WHERE profesion = 'Panadero' ORDER BY oro DESC.",
+  undefined,
+  undefined,
+  undefined,
+  "SELECT * FROM habitante WHERE profesion = 'Piloto'.",
+  undefined,
+  "Une pueblo.jefe con habitante.habitante_id; filtra pueblo.nombre = 'Villa Cebolla'.",
+  undefined,
+  "COUNT(*) con JOIN a pueblo, Villa Cebolla y genero = 'f'.",
+  "SELECT habitante.nombre con JOIN, Villa Cebolla y genero = 'f'.",
+  undefined,
+  "SUM(habitante.oro) con OR para Mercader, Comerciante y Panadero.",
+  undefined,
+  'SELECT estado, AVG(habitante.oro) FROM habitante GROUP BY estado.',
+  undefined,
+  "DELETE FROM habitante WHERE nombre = 'Dorotea Sucia'.",
+  "UPDATE habitante SET estado = 'amigable' WHERE profesion = 'Piloto'.",
+  "UPDATE habitante SET estado = 'emigrado' WHERE habitante_id = 20.",
+];
+
 export function getIslandFlatSteps(): IslandStepDefinition[] {
   return ISLAND_MISSIONS.flatMap((mission) => mission.steps);
 }
@@ -384,6 +446,10 @@ export function getIslandMissionForStep(
 export function getIslandStep(stepIndex: number): IslandStepDefinition | null {
   const steps = getIslandFlatSteps();
   return steps[stepIndex] ?? null;
+}
+
+export function getIslandStepHint(stepIndex: number): string | undefined {
+  return ISLAND_FLAT_HINTS[stepIndex] ?? getIslandStep(stepIndex)?.hint;
 }
 
 export function getIslandMissionProgress(stepIndex: number): {

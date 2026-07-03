@@ -47,6 +47,15 @@ export class IslandController {
     return this.islandExecutorService.restart(dto.sessionId);
   }
 
+  @Post('session/resume')
+  @ApiOperation({
+    summary:
+      'Reanudar una sesión existente sin clonar de nuevo la base de datos',
+  })
+  resume(@Body() dto: IslandCloseSessionDto) {
+    return this.islandSessionService.resumeSession(dto.sessionId);
+  }
+
   @Post('session/close')
   @ApiOperation({
     summary: 'Cerrar sesión y eliminar la base clonada del jugador',
