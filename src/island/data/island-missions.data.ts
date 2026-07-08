@@ -21,9 +21,8 @@ export interface IslandStepDefinition {
   /** Si es true, el paso se completa con Continuar (opcionalmente ejecuta demoSql) */
   autoComplete?: boolean;
   demoSql?: string | string[];
-  /** Consulta esperada: el jugador debe escribir esta sentencia (con ; al final). */
+  /** Consulta de referencia para pistas; la validación acepta variantes equivalentes. */
   solution?: string;
-  preserveOrder?: boolean;
   /** Para DML: consulta de verificación y número de filas esperadas */
   verificationQuery?: string;
   verificationCount?: number;
@@ -103,14 +102,14 @@ export const ISLAND_MISSIONS: IslandMissionDefinition[] = [
     steps: [
       {
         narrative:
-          'Hola forastero, ¿adónde vas? Soy Pablo, alcalde de Ciudad Mono. Te registraré como habitante de mi pueblo.',
+          'Hola extranjero, ¿adónde vas? Soy Pablo, alcalde de Ciudad Mono. Te registraré como habitante de mi pueblo.',
         kind: 'narrative',
         autoComplete: true,
         demoSql:
           "INSERT INTO habitante (nombre, pueblo_id, genero, profesion, oro, estado) VALUES ('Extranjero', 1, '?', '?', 0, '?')",
         answer: 'Listo. Ya figuras registrado en Ciudad Mono.',
         followUp:
-          '¡Oye, no me llames Forastero! Bueno… ¿cuál es mi habitante_id? (Pista: usa SELECT con columnas concretas, no *.)',
+          '¡Oye, no me llames Extranjero! Bueno… ¿cuál es mi habitante_id? (Pista: usa SELECT con columnas concretas, no *.)',
       },
       {
         narrative: '¿Cuál es mi habitante_id?',
@@ -203,7 +202,6 @@ export const ISLAND_MISSIONS: IslandMissionDefinition[] = [
         kind: 'select',
         solution:
           "SELECT * FROM habitante WHERE profesion = 'Panadero' ORDER BY oro DESC",
-        preserveOrder: true,
         answer: '¡Ah, Pablo! ¡Lo conozco!',
       },
       {
@@ -235,7 +233,7 @@ export const ISLAND_MISSIONS: IslandMissionDefinition[] = [
   {
     id: 5,
     title: 'Rescatar al piloto',
-    summary: 'INNER JOIN y COUNT',
+    summary: 'JOIN y COUNT',
     steps: [
       {
         narrative: '¿Hay algún piloto en la isla? Podría volver a casa.',

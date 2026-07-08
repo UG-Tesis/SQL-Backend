@@ -1,6 +1,7 @@
 import {
   assertIslandSqlTokenSpacing,
   compareIslandSql,
+  normalizeIslandDoubleQuotedStrings,
   normalizeIslandSqlForComparison,
   parseIslandPlayerSql,
   solutionToSqlTemplate,
@@ -19,13 +20,16 @@ describe('island-sql-normalize', () => {
     }
   });
 
-  it('rechaza consultas sin punto y coma', () => {
+  it('acepta consultas sin punto y coma', () => {
     const result = compareIslandSql('Select * from pueblo', solution);
     expect(result.ok).toBe(false);
     if (!result.ok) {
-      expect(result.message).toContain('punto y coma');
-      expect(result.mismatch).toBe(false);
+      expect(result.mismatch).toBe(true);
     }
+
+    expect(parseIslandPlayerSql('SELECT * FROM pueblo')).toBe(
+      'SELECT * FROM pueblo',
+    );
   });
 
   it('rechaza tokens pegados sin espacio', () => {
@@ -92,6 +96,28 @@ describe('island-sql-normalize', () => {
     expect(parseIslandPlayerSql('SELECT * FROM pueblo;')).toBe(
       'SELECT * FROM pueblo',
     );
+  });
+
+  it('normaliza comillas dobles a simples al parsear', () => {
+    expect(
+      parseIslandPlayerSql(
+        'SELECT * FROM habitante WHERE profesion = "Carnicero";',
+      ),
+    ).toBe("SELECT * FROM habitante WHERE profesion = 'Carnicero'");
+
+    expect(
+      assertIslandSqlTokenSpacing(
+        'SELECT * FROM habitante WHERE profesion = "Carnicero";',
+      ),
+    ).toBeNull();
+  });
+
+  it('normalizeIslandDoubleQuotedStrings convierte literales LIKE', () => {
+    expect(
+      normalizeIslandDoubleQuotedStrings(
+        'SELECT * FROM habitante WHERE profesion LIKE "%herrero"',
+      ),
+    ).toBe("SELECT * FROM habitante WHERE profesion LIKE '%herrero'");
   });
 
   it('assertIslandSqlTokenSpacing permite COUNT(*)', () => {

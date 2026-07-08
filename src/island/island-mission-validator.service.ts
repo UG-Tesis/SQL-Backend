@@ -1,23 +1,27 @@
 import { Injectable } from '@nestjs/common';
 import type { IslandStepDefinition } from './data/island-missions.data';
 import {
-  compareIslandSql,
+  compareIslandResultSets,
+  describeIslandResultSetMismatch,
+  type IslandQueryResult,
+} from './island-result-set-compare';
+import {
   formatIslandExpectedHint,
+  parseIslandPlayerSql,
 } from './island-sql-normalize';
+import { stripOrderByClause } from './island.validation';
 import type { IslandStepValidationError } from './island-step-validation.types';
 
 export type { IslandStepValidationError } from './island-step-validation.types';
 
-type QueryRunner = (sql: string) => Promise<{
-  rows: Record<string, unknown>[];
-  rowCount: number;
-}>;
+type QueryRunner = (sql: string) => Promise<IslandQueryResult>;
 
 @Injectable()
 export class IslandMissionValidatorService {
   async validateStep(
     step: IslandStepDefinition,
     playerSql: string,
+    playerResult: IslandQueryResult,
     runQuery: QueryRunner,
   ): Promise<IslandStepValidationError | null> {
     if (step.kind === 'narrative') {
@@ -31,20 +35,62 @@ export class IslandMissionValidatorService {
       };
     }
 
-    const comparison = compareIslandSql(playerSql, step.solution);
-    if (!comparison.ok) {
-      return {
-        message: comparison.message,
-        showStepHint: comparison.mismatch,
-        hint: comparison.hint,
-      };
+    const formatError = this.validateSqlFormat(playerSql);
+    if (formatError) {
+      return formatError;
     }
 
     if (step.kind === 'dml') {
       return this.validateDmlEffect(step, runQuery);
     }
 
-    return null;
+    return this.validateSelectResult(step, playerResult, runQuery);
+  }
+
+  private validateSqlFormat(
+    playerSql: string,
+  ): IslandStepValidationError | null {
+    try {
+      parseIslandPlayerSql(playerSql);
+      return null;
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : 'Sentencia SQL no válida.';
+      return {
+        message,
+        showStepHint: false,
+      };
+    }
+  }
+
+  private async validateSelectResult(
+    step: IslandStepDefinition,
+    playerResult: IslandQueryResult,
+    runQuery: QueryRunner,
+  ): Promise<IslandStepValidationError | null> {
+    const hint = formatIslandExpectedHint(step.solution!);
+
+    try {
+      const solutionResult = await runQuery(stripOrderByClause(step.solution!));
+      const comparison = compareIslandResultSets(playerResult, solutionResult);
+      if (comparison.ok) {
+        return null;
+      }
+
+      return {
+        message: describeIslandResultSetMismatch(comparison.kind),
+        showStepHint: true,
+        hint,
+      };
+    } catch (error) {
+      return {
+        message:
+          error instanceof Error
+            ? error.message
+            : 'Error al verificar el resultado de la consulta.',
+        showStepHint: false,
+      };
+    }
   }
 
   private async validateDmlEffect(

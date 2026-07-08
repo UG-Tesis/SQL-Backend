@@ -3,7 +3,80 @@ export type IslandSqlCompareResult =
   | { ok: false; message: string; mismatch: boolean; hint?: string };
 
 const SQL_TOKEN_PATTERN =
-  /('(?:''|[^'])*')|(\d+(?:\.\d+)?)|([a-zA-Z_][a-zA-Z0-9_]*(?:\.[a-zA-Z_][a-zA-Z0-9_]*)*)|(!=|<>|<=|>=|=|<|>|\*|\(|\)|,|;)/g;
+  /('(?:''|[^'])*')|("(?:""|[^"])*")|(\d+(?:\.\d+)?)|([a-zA-Z_][a-zA-Z0-9_]*(?:\.[a-zA-Z_][a-zA-Z0-9_]*)*)|(!=|<>|<=|>=|=|<|>|\*|\(|\)|,|;)/g;
+
+/** Convierte literales con comillas dobles a simples para MySQL (p. ej. "Extranjero" → 'Extranjero'). */
+export function normalizeIslandDoubleQuotedStrings(sql: string): string {
+  let result = '';
+  let index = 0;
+
+  while (index < sql.length) {
+    const char = sql[index];
+
+    if (char === "'") {
+      const literal = readIslandQuotedLiteral(sql, index, "'");
+      result += literal.value;
+      index = literal.end;
+      continue;
+    }
+
+    if (char === '"') {
+      const literal = readIslandQuotedLiteral(sql, index, '"');
+      result += `'${literal.inner.replace(/'/g, "''")}'`;
+      index = literal.end;
+      continue;
+    }
+
+    result += char;
+    index += 1;
+  }
+
+  return result;
+}
+
+function readIslandQuotedLiteral(
+  sql: string,
+  start: number,
+  quote: "'" | '"',
+): { value: string; inner: string; end: number } {
+  let index = start + 1;
+  let inner = '';
+
+  while (index < sql.length) {
+    if (sql[index] === quote) {
+      if (sql[index + 1] === quote) {
+        inner += quote;
+        index += 2;
+        continue;
+      }
+      index += 1;
+      break;
+    }
+    inner += sql[index];
+    index += 1;
+  }
+
+  return {
+    value: sql.slice(start, index),
+    inner,
+    end: index,
+  };
+}
+
+function copyIslandQuotedLiteral(
+  sql: string,
+  start: number,
+): { value: string; end: number } {
+  const quote = sql[start] as "'" | '"';
+  const literal = readIslandQuotedLiteral(sql, start, quote);
+  if (quote === '"') {
+    return {
+      value: `'${literal.inner.replace(/'/g, "''")}'`,
+      end: literal.end,
+    };
+  }
+  return { value: literal.value, end: literal.end };
+}
 
 export function stripIslandSqlComments(sql: string): string {
   return sql
@@ -78,22 +151,10 @@ function lowercaseOutsideStrings(sql: string): string {
   let index = 0;
 
   while (index < sql.length) {
-    if (sql[index] === "'") {
-      result += sql[index];
-      index += 1;
-      while (index < sql.length) {
-        result += sql[index];
-        if (sql[index] === "'" && sql[index + 1] === "'") {
-          result += sql[index + 1];
-          index += 2;
-          continue;
-        }
-        if (sql[index] === "'") {
-          index += 1;
-          break;
-        }
-        index += 1;
-      }
+    if (sql[index] === "'" || sql[index] === '"') {
+      const literal = copyIslandQuotedLiteral(sql, index);
+      result += literal.value;
+      index = literal.end;
       continue;
     }
 
@@ -102,6 +163,27 @@ function lowercaseOutsideStrings(sql: string): string {
   }
 
   return result;
+}
+
+function prepareIslandPlayerSql(sql: string): string {
+  return normalizeIslandDoubleQuotedStrings(stripIslandSqlComments(sql.trim()));
+}
+
+/** Una sentencia por envío; el `;` final es opcional (como SQL Island original). */
+export function trimIslandSqlToSingleStatement(sql: string): string {
+  const semipos = sql.indexOf(';');
+  const single = semipos === -1 ? sql : sql.slice(0, semipos);
+  const trimmed = single.trim();
+
+  if (!trimmed) {
+    throw new Error('La sentencia SQL no puede estar vacía.');
+  }
+
+  if (semipos !== -1 && sql.slice(semipos + 1).trim()) {
+    throw new Error('Solo se permite ejecutar una sentencia SQL a la vez.');
+  }
+
+  return trimmed;
 }
 
 export function normalizeIslandSqlForComparison(sql: string): string {
@@ -184,6 +266,7 @@ function maskSolutionIdentifiers(sql: string): string {
 export function solutionToSqlTemplate(solutionSql: string): string {
   let sql = stripIslandSqlComments(solutionSql).replace(/\s+/g, ' ').trim();
 
+  sql = normalizeIslandDoubleQuotedStrings(sql);
   sql = sql.replace(/'(?:''|[^'])*'/g, "'___'");
   sql = sql.replace(/\b\d+\b/g, '___');
   sql = maskSolutionIdentifiers(sql);
@@ -432,7 +515,7 @@ export function compareIslandSql(
   playerSql: string,
   solutionSql: string,
 ): IslandSqlCompareResult {
-  const stripped = stripIslandSqlComments(playerSql.trim());
+  const stripped = prepareIslandPlayerSql(playerSql);
   if (!stripped) {
     return {
       ok: false,
@@ -441,10 +524,14 @@ export function compareIslandSql(
     };
   }
 
-  if (!/;+\s*$/.test(stripped)) {
+  let executable: string;
+  try {
+    executable = trimIslandSqlToSingleStatement(stripped);
+  } catch (error) {
     return {
       ok: false,
-      message: 'Termina la sentencia con punto y coma (;).',
+      message:
+        error instanceof Error ? error.message : 'Sentencia SQL no válida.',
       mismatch: false,
     };
   }
@@ -469,33 +556,18 @@ export function compareIslandSql(
 
   return {
     ok: true,
-    executable: stripped.replace(/;+\s*$/g, '').trim(),
+    executable,
   };
 }
 
-/** Valida formato del jugador (punto y coma, espacios) y devuelve SQL ejecutable sin `;`. */
+/** Valida formato del jugador y devuelve SQL ejecutable (sin `;` final). */
 export function parseIslandPlayerSql(playerSql: string): string {
-  const stripped = stripIslandSqlComments(playerSql.trim());
-  if (!stripped) {
-    throw new Error('La sentencia SQL no puede estar vacía.');
-  }
-
-  if (!/;+\s*$/.test(stripped)) {
-    throw new Error('Termina la sentencia con punto y coma (;).');
-  }
+  const stripped = prepareIslandPlayerSql(playerSql);
+  const executable = trimIslandSqlToSingleStatement(stripped);
 
   const spacingError = assertIslandSqlTokenSpacing(stripped);
   if (spacingError) {
     throw new Error(spacingError);
-  }
-
-  const executable = stripped.replace(/;+\s*$/g, '').trim();
-  if (!executable) {
-    throw new Error('La sentencia SQL no puede estar vacía.');
-  }
-
-  if (executable.includes(';')) {
-    throw new Error('Solo se permite ejecutar una sentencia SQL a la vez.');
   }
 
   return executable;

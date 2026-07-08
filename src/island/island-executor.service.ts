@@ -287,7 +287,11 @@ export class IslandExecutorService {
         const validationError = await this.missionValidator.validateStep(
           step,
           sql.trim(),
-          async (query) => {
+          {
+            rows: execution.rows,
+            rowCount: execution.rowCount,
+          },
+          async (query: string) => {
             const [rows, fields] =
               await connection.query<RowDataPacket[]>(query);
             return {
